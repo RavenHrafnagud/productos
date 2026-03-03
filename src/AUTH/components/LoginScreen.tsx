@@ -186,7 +186,7 @@ export function LoginScreen({
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             onFocus={onClearError}
-            placeholder={adminEmail}
+            placeholder="Correo@gmail.com"
             required
           />
 
