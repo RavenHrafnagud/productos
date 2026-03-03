@@ -1,43 +1,172 @@
 /**
- * Seccion de inventario por local.
+ * Seccion de inventario.
+ * Permite cargar stock inicial y visualizar disponibilidad de cada producto.
  */
-import { useInventory } from '../hooks/useInventory';
+import { FormEvent, useMemo, useState } from 'react';
+import { useProducts } from '../../PRODUCTS/hooks/useProducts';
 import { formatDateTime } from '../../SHARED/utils/format';
+import { toPositiveNumber } from '../../SHARED/utils/validators';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
+import {
+  ButtonsRow,
+  Divider,
+  Field,
+  FormGrid,
+  GhostButton,
+  InputControl,
+  PrimaryButton,
+  SelectControl,
+} from '../../SHARED/ui/FormControls';
 import { SectionCard, SectionHeader, SectionMeta, SectionTitle } from '../../SHARED/ui/SectionCard';
 import { StatusState } from '../../SHARED/ui/StatusState';
+import { useInventory } from '../hooks/useInventory';
 
 interface InventorySectionProps {
-  localId: string;
+  branchId: string;
   refreshKey: number;
 }
 
-export function InventorySection({ localId, refreshKey }: InventorySectionProps) {
-  const { inventory, status, error } = useInventory(localId, refreshKey);
+interface InventoryForm {
+  productId: string;
+  currentQty: string;
+  minQty: string;
+}
+
+const EMPTY_FORM: InventoryForm = {
+  productId: '',
+  currentQty: '',
+  minQty: '',
+};
+
+export function InventorySection({ branchId, refreshKey }: InventorySectionProps) {
+  const { products } = useProducts(refreshKey);
+  const { inventory, status, error, saveStatus, saveError, saveRow, reload } = useInventory(
+    branchId,
+    refreshKey,
+  );
+  const [form, setForm] = useState<InventoryForm>(EMPTY_FORM);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const productOptions = useMemo(
+    () => products.filter((product) => product.activo).map((product) => ({ id: product.id, name: product.nombre })),
+    [products],
+  );
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError(null);
+
+    if (!branchId) {
+      setFormError('Selecciona una sucursal antes de cargar inventario.');
+      return;
+    }
+
+    const cantidadActual = toPositiveNumber(form.currentQty);
+    const cantidadMinima = toPositiveNumber(form.minQty);
+
+    if (!form.productId) {
+      setFormError('Debes seleccionar un producto.');
+      return;
+    }
+    if (cantidadActual === null || cantidadMinima === null) {
+      setFormError('Las cantidades deben ser numericas y mayores o iguales a cero.');
+      return;
+    }
+
+    try {
+      await saveRow({
+        productoId: form.productId,
+        sucursalId: branchId,
+        cantidadActual,
+        cantidadMinima,
+      });
+      setForm(EMPTY_FORM);
+    } catch {
+      // El error principal se comunica con saveError.
+    }
+  };
 
   return (
     <SectionCard>
       <SectionHeader>
-        <SectionTitle>INVENTORY / Stock actual</SectionTitle>
-        <SectionMeta>{localId ? `Local: ${localId}` : 'Sin local seleccionado'}</SectionMeta>
+        <SectionTitle>Inventario</SectionTitle>
+        <SectionMeta>{branchId ? 'Gestionando stock de la sucursal seleccionada' : 'Sin sucursal activa'}</SectionMeta>
       </SectionHeader>
 
-      {!localId && <StatusState kind="info" message="Define local_id para ver inventario." />}
-      {localId && status === 'loading' && <StatusState kind="loading" message="Cargando inventario..." />}
-      {localId && status === 'error' && <StatusState kind="error" message={error ?? 'Error inesperado.'} />}
-      {localId && status === 'success' && inventory.length === 0 && (
-        <StatusState kind="empty" message="No hay inventario registrado para este local." />
+      <FormGrid onSubmit={handleSubmit}>
+        <Field>
+          Producto
+          <SelectControl
+            value={form.productId}
+            onChange={(event) => setForm((prev) => ({ ...prev, productId: event.target.value }))}
+          >
+            <option value="">Selecciona un producto</option>
+            {productOptions.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.name}
+              </option>
+            ))}
+          </SelectControl>
+        </Field>
+
+        <Field>
+          Cantidad disponible
+          <InputControl
+            inputMode="decimal"
+            value={form.currentQty}
+            onChange={(event) => setForm((prev) => ({ ...prev, currentQty: event.target.value }))}
+            placeholder="100"
+            required
+          />
+        </Field>
+
+        <Field>
+          Cantidad minima recomendada
+          <InputControl
+            inputMode="decimal"
+            value={form.minQty}
+            onChange={(event) => setForm((prev) => ({ ...prev, minQty: event.target.value }))}
+            placeholder="10"
+            required
+          />
+        </Field>
+
+        {(formError || saveError) && (
+          <StatusState kind="error" message={formError ?? saveError ?? 'Error inesperado.'} />
+        )}
+        {saveStatus === 'success' && <StatusState kind="info" message="Inventario actualizado." />}
+
+        <ButtonsRow>
+          <PrimaryButton type="submit" disabled={saveStatus === 'submitting'}>
+            {saveStatus === 'submitting' ? 'Guardando...' : 'Guardar stock'}
+          </PrimaryButton>
+          <GhostButton type="button" onClick={() => reload()}>
+            Actualizar lista
+          </GhostButton>
+        </ButtonsRow>
+      </FormGrid>
+
+      <Divider />
+
+      {!branchId && <StatusState kind="info" message="Primero selecciona o crea una sucursal." />}
+      {branchId && status === 'loading' && <StatusState kind="loading" message="Cargando inventario..." />}
+      {branchId && status === 'error' && <StatusState kind="error" message={error ?? 'Error inesperado.'} />}
+      {branchId && status === 'success' && inventory.length === 0 && (
+        <StatusState
+          kind="empty"
+          message="No hay stock cargado para esta sucursal. Usa el formulario para iniciar."
+        />
       )}
 
-      {localId && status === 'success' && inventory.length > 0 && (
+      {branchId && status === 'success' && inventory.length > 0 && (
         <TableWrap>
           <DataTable>
             <thead>
               <tr>
                 <th>Producto</th>
                 <th>Codigo</th>
-                <th>Actual</th>
-                <th>Minima</th>
+                <th>Disponible</th>
+                <th>Minimo</th>
                 <th>Estado</th>
                 <th>Actualizado</th>
               </tr>
@@ -52,9 +181,7 @@ export function InventorySection({ localId, refreshKey }: InventorySectionProps)
                     <td>{item.cantidadActual}</td>
                     <td>{item.cantidadMinima}</td>
                     <td>
-                      <Tag $tone={lowStock ? 'warn' : 'ok'}>
-                        {lowStock ? 'Bajo' : 'Ok'}
-                      </Tag>
+                      <Tag $tone={lowStock ? 'warn' : 'ok'}>{lowStock ? 'Bajo' : 'Estable'}</Tag>
                     </td>
                     <td>{formatDateTime(item.updatedAt)}</td>
                   </tr>

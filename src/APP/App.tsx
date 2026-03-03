@@ -1,81 +1,153 @@
 /**
- * Composicion principal.
- * Orquesta los modulos de Productos, Inventario y Ventas.
+ * Componente raiz de aplicacion.
+ * Orquesta autenticacion, sucursales, productos e inventario.
  */
-import { FormEvent, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { LoginScreen } from '../AUTH/components/LoginScreen';
+import { useAuthSession } from '../AUTH/hooks/useAuthSession';
+import { BranchesSection } from '../BRANCHES/components/BranchesSection';
+import { useBranches } from '../BRANCHES/hooks/useBranches';
+import type { CreateBranchInput } from '../BRANCHES/types/Branch';
 import { InventorySection } from '../INVENTORY/components/InventorySection';
 import { ProductsSection } from '../PRODUCTS/components/ProductsSection';
-import { SalesSection } from '../SALES/components/SalesSection';
 import { appEnv, isSupabaseConfigured } from '../SHARED/config/env';
+import { StatusState } from '../SHARED/ui/StatusState';
 import {
   ActionButton,
   AlertStrip,
-  Controls,
+  Brand,
   Grid,
   Header,
   HeaderCopy,
   HeaderTitle,
-  Input,
   Page,
-  SecondaryButton,
+  Toolbar,
+  UserPill,
 } from './styles/AppShell.styles';
 
 export default function App() {
-  const [localInput, setLocalInput] = useState(appEnv.defaultLocalId);
-  const [localId, setLocalId] = useState(appEnv.defaultLocalId);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [selectedBranchId, setSelectedBranchId] = useState(appEnv.defaultBranchId);
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
-  const canLoadOperationalModules = Boolean(localId.trim());
+  const { session, loading, authError, signIn, signOut, clearAuthError } = useAuthSession();
+  const { branches, status, error, createStatus, createError, addBranch, reload } = useBranches(refreshKey);
 
-  const handleApplyLocal = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setLocalId(localInput.trim());
-    setRefreshKey((prev) => prev + 1);
-  };
+  // Si no hay una sucursal elegida, toma la primera activa en memoria.
+  useEffect(() => {
+    if (selectedBranchId || branches.length === 0) return;
+    const firstActiveBranch = branches.find((branch) => branch.activo) ?? branches[0];
+    setSelectedBranchId(firstActiveBranch.id);
+  }, [branches, selectedBranchId]);
+
+  const currentUser = useMemo(() => session?.user?.email ?? 'Usuario autenticado', [session?.user?.email]);
 
   const handleRefresh = () => {
     setRefreshKey((prev) => prev + 1);
   };
 
+  const handleCreateBranch = async (input: CreateBranchInput) => {
+    const branch = await addBranch(input);
+    setSelectedBranchId(branch.id);
+  };
+
+  const handleLogin = async (email: string, password: string) => {
+    setAuthSubmitting(true);
+    try {
+      await signIn(email, password);
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setLogoutLoading(true);
+    try {
+      await signOut();
+      setSelectedBranchId(appEnv.defaultBranchId);
+    } finally {
+      setLogoutLoading(false);
+    }
+  };
+
+  if (!isSupabaseConfigured) {
+    return (
+      <Page>
+        <Header>
+          <Brand>{appEnv.companyName}</Brand>
+          <HeaderTitle>Configuracion pendiente</HeaderTitle>
+          <HeaderCopy>
+            Debes completar las variables de entorno para establecer la conexion con Supabase.
+          </HeaderCopy>
+        </Header>
+        <AlertStrip>
+          Completa <strong>VITE_SUPABASE_URL</strong> y <strong>VITE_SUPABASE_ANON_KEY</strong> en el archivo
+          <strong> .env</strong>.
+        </AlertStrip>
+      </Page>
+    );
+  }
+
+  if (loading) {
+    return (
+      <Page>
+        <StatusState kind="loading" message="Verificando sesion segura..." />
+      </Page>
+    );
+  }
+
+  if (!session) {
+    return (
+      <LoginScreen
+        companyName={appEnv.companyName}
+        adminEmail={appEnv.adminEmail}
+        busy={authSubmitting}
+        authError={authError}
+        onLogin={handleLogin}
+        onClearError={clearAuthError}
+      />
+    );
+  }
+
   return (
     <Page>
       <Header>
-        <HeaderTitle>Panel operativo de productos</HeaderTitle>
+        <Brand>{appEnv.companyName}</Brand>
+        <HeaderTitle>Centro de control comercial</HeaderTitle>
         <HeaderCopy>
-          Estructura modular React + TypeScript conectada a Supabase por dominios.
+          Registra sucursales, crea productos y carga inventario inicial desde una sola interfaz.
         </HeaderCopy>
 
-        <Controls onSubmit={handleApplyLocal}>
-          <Input
-            value={localInput}
-            onChange={(event) => setLocalInput(event.target.value)}
-            placeholder="UUID del local para ventas e inventario"
-            aria-label="UUID del local"
-          />
-          <ActionButton type="submit">Aplicar local</ActionButton>
-          <SecondaryButton type="button" onClick={handleRefresh}>
-            Refrescar datos
-          </SecondaryButton>
-        </Controls>
+        <Toolbar>
+          <UserPill>{currentUser}</UserPill>
+          <ActionButton type="button" onClick={handleRefresh}>
+            Actualizar panel
+          </ActionButton>
+          <ActionButton type="button" onClick={handleLogout} disabled={logoutLoading}>
+            {logoutLoading ? 'Cerrando...' : 'Cerrar sesion'}
+          </ActionButton>
+        </Toolbar>
       </Header>
 
-      {!isSupabaseConfigured && (
-        <AlertStrip>
-          Configura <strong>VITE_SUPABASE_URL</strong> y{' '}
-          <strong>VITE_SUPABASE_ANON_KEY</strong> para habilitar la conexion.
-        </AlertStrip>
-      )}
-
-      {isSupabaseConfigured && !canLoadOperationalModules && (
-        <AlertStrip>
-          Ingresa un <strong>local_id</strong> para consultar inventario y ventas.
-        </AlertStrip>
+      {(error || authError) && (
+        <AlertStrip>{error ?? authError ?? 'Ocurrio un error al cargar el tablero.'}</AlertStrip>
       )}
 
       <Grid>
-        <ProductsSection refreshKey={refreshKey} />
-        <SalesSection localId={localId} refreshKey={refreshKey} />
-        <InventorySection localId={localId} refreshKey={refreshKey} />
+        <BranchesSection
+          selectedBranchId={selectedBranchId}
+          branches={branches}
+          status={status}
+          error={error}
+          createStatus={createStatus}
+          createError={createError}
+          onSelectBranch={setSelectedBranchId}
+          onCreateBranch={handleCreateBranch}
+          onReload={reload}
+        />
+        <ProductsSection refreshKey={refreshKey} onProductCreated={handleRefresh} />
+        <InventorySection branchId={selectedBranchId} refreshKey={refreshKey} />
       </Grid>
     </Page>
   );

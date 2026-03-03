@@ -6,8 +6,18 @@ export interface InventoryItem {
   productoId: string;
   productoNombre: string;
   codigoBarra: string | null;
-  localId: string;
+  sucursalId: string;
   cantidadActual: number;
   cantidadMinima: number;
   updatedAt: string;
+}
+
+/**
+ * Payload para ajustar o crear inventario inicial.
+ */
+export interface SaveInventoryInput {
+  productoId: string;
+  sucursalId: string;
+  cantidadActual: number;
+  cantidadMinima: number;
 }

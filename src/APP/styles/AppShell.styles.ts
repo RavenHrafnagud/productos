@@ -1,13 +1,13 @@
 /**
- * Contenedor principal del dashboard.
- * Centraliza layout para mantener consistencia entre modulos.
+ * Estilos del contenedor principal del panel.
+ * Define estructura visual de alto nivel para el dashboard.
  */
 import styled from 'styled-components';
 
 export const Page = styled.main`
-  max-width: 1160px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 28px 18px 36px;
+  padding: 28px 18px 40px;
 
   @media (max-width: 640px) {
     padding: 20px 12px 28px;
@@ -15,91 +15,83 @@ export const Page = styled.main`
 `;
 
 export const Header = styled.header`
-  background: linear-gradient(120deg, #0f5a41 0%, #1f7a5a 55%, #3f9472 100%);
-  color: #f2fff8;
-  padding: 22px;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-soft);
-  margin-bottom: 16px;
+  padding: 24px;
+  border-radius: 20px;
+  color: #f3fff8;
+  background:
+    radial-gradient(circle at 78% 0%, rgba(248, 223, 188, 0.22) 0%, transparent 44%),
+    linear-gradient(122deg, #173f31 0%, #1d6b4f 54%, #30946d 100%);
+  box-shadow: 0 26px 54px rgba(11, 40, 30, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+`;
+
+export const Brand = styled.p`
+  margin: 0;
+  color: #d2f5e6;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  font-size: 0.78rem;
 `;
 
 export const HeaderTitle = styled.h1`
-  margin: 0 0 8px;
-  font-size: 1.65rem;
-  letter-spacing: 0.2px;
+  margin: 4px 0 8px;
+  font-size: 1.82rem;
 `;
 
 export const HeaderCopy = styled.p`
   margin: 0;
-  color: #d2f6e6;
+  color: #d8f8ea;
+  max-width: 650px;
 `;
 
-export const Controls = styled.form`
-  margin-top: 16px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 10px;
-
-  @media (max-width: 720px) {
-    grid-template-columns: 1fr;
-  }
+export const Toolbar = styled.div`
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 `;
 
-export const Input = styled.input`
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.12);
-  color: #f2fff8;
-  padding: 12px 14px;
-  outline: none;
-
-  ::placeholder {
-    color: #c5e6d8;
-  }
-
-  :focus {
-    border-color: rgba(255, 255, 255, 0.9);
-    box-shadow: 0 0 0 3px rgba(242, 255, 248, 0.2);
-  }
+export const UserPill = styled.span`
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font-size: 0.85rem;
 `;
 
 export const ActionButton = styled.button`
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 11px 14px;
-  cursor: pointer;
-  color: #10231c;
-  background: #f7ead9;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 10px;
+  color: #f6fff9;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 8px 12px;
   font-weight: 700;
-  transition: transform 120ms ease, filter 120ms ease;
+  cursor: pointer;
 
-  :hover {
-    filter: brightness(0.98);
-    transform: translateY(-1px);
+  :disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
   }
 `;
 
-export const SecondaryButton = styled(ActionButton)`
-  color: #f2fff8;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-`;
-
 export const AlertStrip = styled.div`
-  margin: 14px 0 18px;
-  border: 1px solid #f3d1ae;
-  background: #fff1e5;
-  color: #6f401f;
-  border-radius: var(--radius-sm);
+  margin-top: 14px;
+  border-radius: 10px;
+  border: 1px solid #f1d2b2;
+  background: #fff4e8;
+  color: #6e4220;
   padding: 12px;
 `;
 
 export const Grid = styled.section`
   display: grid;
   gap: 14px;
+  margin-top: 16px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
 
-  @media (max-width: 1024px) {
+  @media (max-width: 1050px) {
     grid-template-columns: 1fr;
   }
 `;

@@ -1,70 +1,76 @@
-# Productos - Frontend modular con Supabase
+# El Tarot como Guia - Panel Administrativo
 
-Interfaz React + TypeScript para gestionar `productos`, `inventario` y `ventas` usando tu base de datos en Supabase.
+Frontend en React + TypeScript para poblar y operar una base Supabase inicialmente vacia.
 
-## Stack
+## Que incluye esta version
 
-- React 19
-- TypeScript
-- styled-components
-- Supabase JS
-- Yarn 4
-- Vite
+- Login seguro con Supabase Auth (correo + clave fuerte).
+- Registro de sucursales desde interfaz.
+- Registro de productos desde interfaz.
+- Carga de inventario inicial y ajustes de stock desde interfaz.
+- Branding de la empresa: **El Tarot como Guia**.
+- Arquitectura modular por dominios (screaming architecture).
 
-## Arquitectura (Screaming Architecture)
-
-El arbol de carpetas "grita" dominios de negocio, no tecnologia:
+## Estructura de carpetas
 
 ```text
 src/
-  APP/          # composicion y layout global
-  PRODUCTS/     # modulo de catalogo de productos
-  INVENTORY/    # modulo de stock por local
-  SALES/        # modulo de resumen de ventas
-  SHARED/       # utilidades, cliente Supabase, tipos y UI reusable
+  APP/         # composicion general y shell visual
+  AUTH/        # inicio/cierre de sesion
+  BRANCHES/    # sucursales
+  PRODUCTS/    # catalogo de productos
+  INVENTORY/   # inventario por sucursal
+  SHARED/      # componentes, utilidades, cliente Supabase y tipos
+database/
+  001_bootstrap_admin.sql  # script de administrador inicial
 ```
 
-Cada modulo usa la misma estructura:
+## Configuracion local
 
-- `api/`: acceso a datos
-- `hooks/`: estado de UI y consumo asincrono
-- `components/`: presentacion
-- `types/`: modelos del modulo
-
-## Configuracion
-
-1. Crea el archivo `.env` copiando `.env.example`.
-2. Completa:
+1. Copia `.env.example` a `.env`.
+2. Completa estas variables:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
-   - `VITE_DEFAULT_LOCAL_ID` (opcional)
+   - `VITE_COMPANY_NAME` (opcional)
+   - `VITE_ADMIN_EMAIL` (opcional)
+   - `VITE_DEFAULT_BRANCH_ID` (opcional)
+3. Instala dependencias:
+   - `yarn install`
+4. Levanta el proyecto:
+   - `yarn dev`
+
+## Usuario administrador inicial
+
+Para crear el administrador solicitado, ejecuta en Supabase SQL Editor:
+
+- Archivo: `database/001_bootstrap_admin.sql`
+- Correo creado: `hrafnfreistudrr@gmail.com`
+- Contraseña configurada: `$%&Heimdallr-Emperatriz123$%&`
+
+El script:
+- crea/actualiza usuario en `auth.users` con hash seguro (`crypt` + `gen_salt`),
+- crea identidad en `auth.identities`,
+- crea persona/usuario de negocio en esquema `identidad`,
+- asigna rol `admin`.
+
+## Seguridad aplicada en frontend
+
+- No se construyen consultas SQL manuales en cliente.
+- Todas las operaciones usan SDK oficial de Supabase (consultas parametrizadas).
+- Validaciones de entrada para correo, texto y montos.
+- Requisito de clave fuerte en login.
+- Bloqueo temporal tras multiples intentos fallidos.
+- Sesion gestionada por Supabase Auth.
 
 ## Scripts
 
-- `yarn dev`: entorno local
+- `yarn dev`: desarrollo
 - `yarn typecheck`: validacion TypeScript
-- `yarn build`: typecheck + build de produccion
-- `yarn preview`: previsualizacion build
+- `yarn lint`: analisis estatico
+- `yarn build`: typecheck + build
+- `yarn preview`: preview de build
 
-## Flujo de datos
+## Nota operativa
 
-1. `APP/App.tsx` define `localId` y dispara recargas.
-2. Cada modulo consume su hook (`useProducts`, `useInventory`, `useSalesSummary`).
-3. El hook llama su repositorio (`api/*Repository.ts`).
-4. El repositorio consulta Supabase por esquema:
-   - `catalogo.productos`
-   - `operaciones.inventario`
-   - `ventas.ventas`
-5. La UI renderiza estados (`loading`, `error`, `empty`, `success`).
-
-## Guia rapida para extender
-
-- Nuevo modulo de negocio:
-  1. Crear carpeta dominio en `src/`.
-  2. Implementar `types`, `api`, `hooks`, `components`.
-  3. Conectar el componente en `APP/App.tsx`.
-- Nuevas tablas en Supabase:
-  1. Agregar tipos en `SHARED/types/database.ts`.
-  2. Crear repositorio nuevo o ampliar uno existente.
-  3. Reflejar cambios en hook + componente.
-#Texto
+La seguridad final depende de tu configuracion de RLS/policies en Supabase.  
+Este frontend ya esta preparado para trabajar con esas politicas de forma segura.

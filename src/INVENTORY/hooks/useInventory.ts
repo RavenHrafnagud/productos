@@ -1,54 +1,68 @@
 /**
- * Hook de consulta de inventario por local.
+ * Hook de inventario por sucursal.
+ * Administra lectura y registro de stock desde la interfaz.
  */
-import { useEffect, useState } from 'react';
-import { listInventoryByLocal } from '../api/inventoryRepository';
-import type { InventoryItem } from '../types/InventoryItem';
+import { useCallback, useEffect, useState } from 'react';
+import { listInventoryByBranch, saveInventory } from '../api/inventoryRepository';
+import type { InventoryItem, SaveInventoryInput } from '../types/InventoryItem';
 
 interface UseInventoryResult {
   inventory: InventoryItem[];
   status: 'idle' | 'loading' | 'success' | 'error';
   error: string | null;
+  saveStatus: 'idle' | 'submitting' | 'success' | 'error';
+  saveError: string | null;
+  reload: () => Promise<void>;
+  saveRow: (input: SaveInventoryInput) => Promise<void>;
 }
 
-export function useInventory(localId: string, refreshKey: number): UseInventoryResult {
+export function useInventory(branchId: string, refreshKey: number): UseInventoryResult {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [status, setStatus] = useState<UseInventoryResult['status']>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<UseInventoryResult['saveStatus']>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-
-    if (!localId.trim()) {
+  const reload = useCallback(async () => {
+    if (!branchId.trim()) {
       setInventory([]);
       setStatus('idle');
       setError(null);
-      return () => {
-        mounted = false;
-      };
+      return;
     }
 
-    const run = async () => {
-      setStatus('loading');
-      setError(null);
+    setStatus('loading');
+    setError(null);
+    try {
+      const rows = await listInventoryByBranch(branchId);
+      setInventory(rows);
+      setStatus('success');
+    } catch (err) {
+      setStatus('error');
+      setError(err instanceof Error ? err.message : 'No se pudo cargar inventario.');
+    }
+  }, [branchId]);
+
+  const saveRow = useCallback(
+    async (input: SaveInventoryInput) => {
+      setSaveStatus('submitting');
+      setSaveError(null);
       try {
-        const rows = await listInventoryByLocal(localId);
-        if (!mounted) return;
-        setInventory(rows);
-        setStatus('success');
+        await saveInventory(input);
+        setSaveStatus('success');
+        await reload();
       } catch (err) {
-        if (!mounted) return;
-        setStatus('error');
-        setError(err instanceof Error ? err.message : 'No se pudo cargar inventario.');
+        setSaveStatus('error');
+        setSaveError(err instanceof Error ? err.message : 'No se pudo guardar el inventario.');
+        throw err;
       }
-    };
+    },
+    [reload],
+  );
 
-    run();
+  useEffect(() => {
+    reload().catch(() => undefined);
+  }, [reload, refreshKey]);
 
-    return () => {
-      mounted = false;
-    };
-  }, [localId, refreshKey]);
-
-  return { inventory, status, error };
+  return { inventory, status, error, saveStatus, saveError, reload, saveRow };
 }

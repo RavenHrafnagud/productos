@@ -1,31 +1,171 @@
 /**
  * Seccion de productos.
- * Renderiza listado de catalogo con estado de actividad.
+ * Permite registrar articulos y consultar el catalogo.
  */
+import { FormEvent, useState } from 'react';
 import { useProducts } from '../hooks/useProducts';
 import { formatDateTime, formatMoney } from '../../SHARED/utils/format';
+import { sanitizeText, toPositiveNumber } from '../../SHARED/utils/validators';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
+import {
+  ButtonsRow,
+  Divider,
+  Field,
+  Fields,
+  FormGrid,
+  GhostButton,
+  InputControl,
+  PrimaryButton,
+  TextAreaControl,
+} from '../../SHARED/ui/FormControls';
 import { SectionCard, SectionHeader, SectionMeta, SectionTitle } from '../../SHARED/ui/SectionCard';
 import { StatusState } from '../../SHARED/ui/StatusState';
 
 interface ProductsSectionProps {
   refreshKey: number;
+  onProductCreated?: () => void;
 }
 
-export function ProductsSection({ refreshKey }: ProductsSectionProps) {
-  const { products, status, error } = useProducts(refreshKey);
+interface ProductForm {
+  nombre: string;
+  codigoBarra: string;
+  descripcion: string;
+  precioCompra: string;
+  precioVenta: string;
+}
+
+const EMPTY_FORM: ProductForm = {
+  nombre: '',
+  codigoBarra: '',
+  descripcion: '',
+  precioCompra: '',
+  precioVenta: '',
+};
+
+export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectionProps) {
+  const { products, status, error, createStatus, createError, addProduct, reload } = useProducts(refreshKey);
+  const [form, setForm] = useState<ProductForm>(EMPTY_FORM);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError(null);
+
+    const precioCompra = toPositiveNumber(form.precioCompra);
+    const precioVenta = toPositiveNumber(form.precioVenta);
+    const nombre = sanitizeText(form.nombre, 120);
+
+    if (!nombre) {
+      setFormError('El nombre del producto es obligatorio.');
+      return;
+    }
+
+    if (precioCompra === null || precioVenta === null) {
+      setFormError('Los precios deben ser numericos y mayores o iguales a cero.');
+      return;
+    }
+
+    if (precioVenta < precioCompra) {
+      setFormError('El precio de venta no debe ser menor al de compra.');
+      return;
+    }
+
+    try {
+      await addProduct({
+        nombre,
+        codigoBarra: sanitizeText(form.codigoBarra, 50),
+        descripcion: sanitizeText(form.descripcion, 300),
+        precioCompra,
+        precioVenta,
+      });
+      setForm(EMPTY_FORM);
+      onProductCreated?.();
+    } catch {
+      // El detalle de error se refleja en createError.
+    }
+  };
 
   return (
     <SectionCard>
       <SectionHeader>
-        <SectionTitle>PRODUCTS / Catalogo</SectionTitle>
-        <SectionMeta>{products.length} registros</SectionMeta>
+        <SectionTitle>Productos</SectionTitle>
+        <SectionMeta>{products.length} disponibles</SectionMeta>
       </SectionHeader>
+
+      <FormGrid onSubmit={handleSubmit}>
+        <Fields>
+          <Field>
+            Nombre del producto
+            <InputControl
+              value={form.nombre}
+              onChange={(event) => setForm((prev) => ({ ...prev, nombre: event.target.value }))}
+              placeholder="Carta astral premium"
+              required
+            />
+          </Field>
+          <Field>
+            Codigo de barra (opcional)
+            <InputControl
+              value={form.codigoBarra}
+              onChange={(event) => setForm((prev) => ({ ...prev, codigoBarra: event.target.value }))}
+              placeholder="7701234567890"
+            />
+          </Field>
+          <Field>
+            Precio de compra
+            <InputControl
+              inputMode="decimal"
+              value={form.precioCompra}
+              onChange={(event) => setForm((prev) => ({ ...prev, precioCompra: event.target.value }))}
+              placeholder="50000"
+              required
+            />
+          </Field>
+          <Field>
+            Precio de venta
+            <InputControl
+              inputMode="decimal"
+              value={form.precioVenta}
+              onChange={(event) => setForm((prev) => ({ ...prev, precioVenta: event.target.value }))}
+              placeholder="90000"
+              required
+            />
+          </Field>
+        </Fields>
+
+        <Field>
+          Descripcion breve (opcional)
+          <TextAreaControl
+            value={form.descripcion}
+            onChange={(event) => setForm((prev) => ({ ...prev, descripcion: event.target.value }))}
+            placeholder="Sesion guiada con lectura simbolica y orientacion personalizada."
+          />
+        </Field>
+
+        {(formError || createError) && (
+          <StatusState kind="error" message={formError ?? createError ?? 'Error inesperado.'} />
+        )}
+        {createStatus === 'success' && <StatusState kind="info" message="Producto creado correctamente." />}
+
+        <ButtonsRow>
+          <PrimaryButton type="submit" disabled={createStatus === 'submitting'}>
+            {createStatus === 'submitting' ? 'Guardando...' : 'Registrar producto'}
+          </PrimaryButton>
+          <GhostButton type="button" onClick={() => reload()}>
+            Actualizar catalogo
+          </GhostButton>
+        </ButtonsRow>
+      </FormGrid>
+
+      <Divider />
 
       {status === 'loading' && <StatusState kind="loading" message="Cargando productos..." />}
       {status === 'error' && <StatusState kind="error" message={error ?? 'Error inesperado.'} />}
       {status === 'success' && products.length === 0 && (
-        <StatusState kind="empty" message="No hay productos para mostrar." />
+        <StatusState
+          kind="empty"
+          message="Aun no hay productos. Usa el formulario para registrar el primero."
+        />
       )}
 
       {status === 'success' && products.length > 0 && (
@@ -33,7 +173,7 @@ export function ProductsSection({ refreshKey }: ProductsSectionProps) {
           <DataTable>
             <thead>
               <tr>
-                <th>Nombre</th>
+                <th>Producto</th>
                 <th>Codigo</th>
                 <th>Compra</th>
                 <th>Venta</th>
