@@ -23,6 +23,7 @@ src/
   SHARED/      # componentes, utilidades, cliente Supabase y tipos
 database/
   001_bootstrap_admin.sql  # script de administrador inicial
+  005_fix_admin_branch_permissions.sql  # corrige permisos RLS para sucursales
 ```
 
 ## Configuracion local

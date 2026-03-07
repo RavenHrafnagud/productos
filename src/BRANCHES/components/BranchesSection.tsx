@@ -1,9 +1,11 @@
 /**
  * Seccion de sucursales.
- * Permite crear nuevas sedes y seleccionar la sede de trabajo.
+ * Permite crear sucursales con select dependiente: pais -> ciudad -> barrio/localidad.
  */
-import { FormEvent, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
+import { getCityOptions, getCountryOptions, getLocalityOptions } from '../data/locationCatalog';
 import { formatDateTime } from '../../SHARED/utils/format';
+import { isSetupError, toFriendlySupabaseMessage } from '../../SHARED/utils/supabaseGuidance';
 import { isValidEmail, sanitizeText } from '../../SHARED/utils/validators';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
 import {
@@ -22,13 +24,11 @@ import { StatusState } from '../../SHARED/ui/StatusState';
 import type { Branch, CreateBranchInput } from '../types/Branch';
 
 interface BranchesSectionProps {
-  selectedBranchId: string;
   branches: Branch[];
   status: 'idle' | 'loading' | 'success' | 'error';
   error: string | null;
   createStatus: 'idle' | 'submitting' | 'success' | 'error';
   createError: string | null;
-  onSelectBranch: (branchId: string) => void;
   onCreateBranch: (input: CreateBranchInput) => Promise<void>;
   onReload: () => Promise<void>;
 }
@@ -38,24 +38,33 @@ const EMPTY_FORM: CreateBranchInput = {
   nombre: '',
   direccion: '',
   ciudad: '',
+  localidad: '',
   pais: 'CO',
   telefono: '',
   email: '',
 };
 
 export function BranchesSection({
-  selectedBranchId,
   branches,
   status,
   error,
   createStatus,
   createError,
-  onSelectBranch,
   onCreateBranch,
   onReload,
 }: BranchesSectionProps) {
   const [form, setForm] = useState<CreateBranchInput>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
+  const friendlyLoadError = toFriendlySupabaseMessage(error, 'sucursales');
+  const friendlyCreateError = toFriendlySupabaseMessage(createError, 'sucursales');
+
+  // Catalogos dependientes para experiencia guiada en ubicaciones.
+  const countryOptions = useMemo(() => getCountryOptions(), []);
+  const cityOptions = useMemo(() => getCityOptions(form.pais), [form.pais]);
+  const localityOptions = useMemo(
+    () => getLocalityOptions(form.pais, form.ciudad),
+    [form.pais, form.ciudad],
+  );
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -66,6 +75,7 @@ export function BranchesSection({
       nombre: sanitizeText(form.nombre, 80),
       direccion: sanitizeText(form.direccion, 140),
       ciudad: sanitizeText(form.ciudad, 80),
+      localidad: sanitizeText(form.localidad, 80),
       pais: sanitizeText(form.pais, 80) || 'CO',
       telefono: sanitizeText(form.telefono, 25),
       email: form.email.trim().toLowerCase(),
@@ -75,7 +85,10 @@ export function BranchesSection({
       setFormError('Debes completar NIT y nombre de la sucursal.');
       return;
     }
-
+    if (!payload.pais || !payload.ciudad || !payload.localidad) {
+      setFormError('Debes seleccionar pais, ciudad y barrio/localidad.');
+      return;
+    }
     if (payload.email && !isValidEmail(payload.email)) {
       setFormError('El correo de la sucursal no es valido.');
       return;
@@ -85,7 +98,7 @@ export function BranchesSection({
       await onCreateBranch(payload);
       setForm(EMPTY_FORM);
     } catch {
-      // El mensaje de error real ya se muestra desde createError.
+      // El detalle se muestra en createError.
     }
   };
 
@@ -117,20 +130,61 @@ export function BranchesSection({
             />
           </Field>
           <Field>
-            Ciudad
-            <InputControl
-              value={form.ciudad}
-              onChange={(event) => setForm((prev) => ({ ...prev, ciudad: event.target.value }))}
-              placeholder="Bogota"
-            />
+            Pais
+            <SelectControl
+              value={form.pais}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  pais: event.target.value,
+                  ciudad: '',
+                  localidad: '',
+                }))
+              }
+            >
+              <option value="">Selecciona un pais</option>
+              {countryOptions.map((country) => (
+                <option key={country.value} value={country.value}>
+                  {country.label}
+                </option>
+              ))}
+            </SelectControl>
           </Field>
           <Field>
-            Pais
-            <InputControl
-              value={form.pais}
-              onChange={(event) => setForm((prev) => ({ ...prev, pais: event.target.value }))}
-              placeholder="CO"
-            />
+            Ciudad
+            <SelectControl
+              value={form.ciudad}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  ciudad: event.target.value,
+                  localidad: '',
+                }))
+              }
+              disabled={!form.pais}
+            >
+              <option value="">{form.pais ? 'Selecciona una ciudad' : 'Primero selecciona un pais'}</option>
+              {cityOptions.map((city) => (
+                <option key={city.value} value={city.value}>
+                  {city.label}
+                </option>
+              ))}
+            </SelectControl>
+          </Field>
+          <Field>
+            Barrio o Localidad
+            <SelectControl
+              value={form.localidad}
+              onChange={(event) => setForm((prev) => ({ ...prev, localidad: event.target.value }))}
+              disabled={!form.ciudad}
+            >
+              <option value="">{form.ciudad ? 'Selecciona una localidad' : 'Primero selecciona una ciudad'}</option>
+              {localityOptions.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </SelectControl>
           </Field>
           <Field>
             Telefono
@@ -157,28 +211,15 @@ export function BranchesSection({
               placeholder="Cra 10 # 20-30"
             />
           </Field>
-          <Field>
-            Sede de trabajo actual
-            <SelectControl
-              value={selectedBranchId}
-              onChange={(event) => onSelectBranch(event.target.value)}
-            >
-              <option value="">Selecciona una sede</option>
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.nombre}
-                </option>
-              ))}
-            </SelectControl>
-          </Field>
         </Fields>
 
-        {(formError || createError) && (
-          <StatusState kind="error" message={formError ?? createError ?? 'Error inesperado.'} />
+        {(formError || friendlyCreateError) && (
+          <StatusState
+            kind={formError ? 'error' : isSetupError(createError) ? 'info' : 'error'}
+            message={formError ?? friendlyCreateError ?? 'Error inesperado.'}
+          />
         )}
-        {createStatus === 'success' && (
-          <StatusState kind="info" message="Sucursal creada correctamente." />
-        )}
+        {createStatus === 'success' && <StatusState kind="info" message="Sucursal creada correctamente." />}
 
         <ButtonsRow>
           <PrimaryButton type="submit" disabled={createStatus === 'submitting'}>
@@ -193,12 +234,14 @@ export function BranchesSection({
       <Divider />
 
       {status === 'loading' && <StatusState kind="loading" message="Cargando sucursales..." />}
-      {status === 'error' && <StatusState kind="error" message={error ?? 'Error inesperado.'} />}
-      {status === 'success' && branches.length === 0 && (
+      {status === 'error' && (
         <StatusState
-          kind="empty"
-          message="Aun no hay sucursales. Usa el formulario para registrar la primera."
+          kind={isSetupError(error) ? 'info' : 'error'}
+          message={friendlyLoadError ?? 'Error inesperado.'}
         />
+      )}
+      {status === 'success' && branches.length === 0 && (
+        <StatusState kind="empty" message="Primero crea tu primera sucursal usando el formulario." />
       )}
 
       {status === 'success' && branches.length > 0 && (
@@ -208,6 +251,7 @@ export function BranchesSection({
               <tr>
                 <th>Sucursal</th>
                 <th>Ciudad</th>
+                <th>Barrio/Localidad</th>
                 <th>Contacto</th>
                 <th>Estado</th>
                 <th>Creada</th>
@@ -218,6 +262,7 @@ export function BranchesSection({
                 <tr key={branch.id}>
                   <td>{branch.nombre}</td>
                   <td>{branch.ciudad ?? 'Sin ciudad'}</td>
+                  <td>{branch.localidad ?? 'Sin localidad'}</td>
                   <td>{branch.telefono ?? branch.email ?? 'Sin contacto'}</td>
                   <td>
                     <Tag $tone={branch.activo ? 'ok' : 'off'}>

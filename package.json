@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
+    "country-state-city": "^3.2.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "styled-components": "^6.3.11"

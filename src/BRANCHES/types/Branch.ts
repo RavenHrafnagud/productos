@@ -7,6 +7,7 @@ export interface Branch {
   nombre: string;
   direccion: string | null;
   ciudad: string | null;
+  localidad: string | null;
   pais: string;
   telefono: string | null;
   email: string | null;
@@ -22,6 +23,7 @@ export interface CreateBranchInput {
   nombre: string;
   direccion: string;
   ciudad: string;
+  localidad: string;
   pais: string;
   telefono: string;
   email: string;

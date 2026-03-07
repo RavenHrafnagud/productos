@@ -34,6 +34,7 @@ const RAW_RUNTIME_STATE =
           ["@types/react", "npm:19.2.14"],\
           ["@types/react-dom", "virtual:4df0a82f9f1edddc7ee7c29f2b83173d9cf9e24f77b7de8da4970749cbace0afddba3bbb7ec3134d03e0a68c4130160819ddf30f8891b9da1a20b2c61f076e60#npm:19.2.3"],\
           ["@vitejs/plugin-react", "virtual:4df0a82f9f1edddc7ee7c29f2b83173d9cf9e24f77b7de8da4970749cbace0afddba3bbb7ec3134d03e0a68c4130160819ddf30f8891b9da1a20b2c61f076e60#npm:5.1.4"],\
+          ["country-state-city", "npm:3.2.1"],\
           ["eslint", "virtual:4df0a82f9f1edddc7ee7c29f2b83173d9cf9e24f77b7de8da4970749cbace0afddba3bbb7ec3134d03e0a68c4130160819ddf30f8891b9da1a20b2c61f076e60#npm:9.39.3"],\
           ["eslint-plugin-react-hooks", "virtual:4df0a82f9f1edddc7ee7c29f2b83173d9cf9e24f77b7de8da4970749cbace0afddba3bbb7ec3134d03e0a68c4130160819ddf30f8891b9da1a20b2c61f076e60#npm:7.0.1"],\
           ["eslint-plugin-react-refresh", "virtual:4df0a82f9f1edddc7ee7c29f2b83173d9cf9e24f77b7de8da4970749cbace0afddba3bbb7ec3134d03e0a68c4130160819ddf30f8891b9da1a20b2c61f076e60#npm:0.4.26"],\
@@ -1518,6 +1519,15 @@ const RAW_RUNTIME_STATE =
         "linkType": "HARD"\
       }]\
     ]],\
+    ["country-state-city", [\
+      ["npm:3.2.1", {\
+        "packageLocation": "../../../../../AppData/Local/Yarn/Berry/cache/country-state-city-npm-3.2.1-fa995fa40e-10c0.zip/node_modules/country-state-city/",\
+        "packageDependencies": [\
+          ["country-state-city", "npm:3.2.1"]\
+        ],\
+        "linkType": "HARD"\
+      }]\
+    ]],\
     ["cross-spawn", [\
       ["npm:7.0.6", {\
         "packageLocation": "../../../../../AppData/Local/Yarn/Berry/cache/cross-spawn-npm-7.0.6-264bddf921-10c0.zip/node_modules/cross-spawn/",\
@@ -2644,6 +2654,7 @@ const RAW_RUNTIME_STATE =
           ["@types/react", "npm:19.2.14"],\
           ["@types/react-dom", "virtual:4df0a82f9f1edddc7ee7c29f2b83173d9cf9e24f77b7de8da4970749cbace0afddba3bbb7ec3134d03e0a68c4130160819ddf30f8891b9da1a20b2c61f076e60#npm:19.2.3"],\
           ["@vitejs/plugin-react", "virtual:4df0a82f9f1edddc7ee7c29f2b83173d9cf9e24f77b7de8da4970749cbace0afddba3bbb7ec3134d03e0a68c4130160819ddf30f8891b9da1a20b2c61f076e60#npm:5.1.4"],\
+          ["country-state-city", "npm:3.2.1"],\
           ["eslint", "virtual:4df0a82f9f1edddc7ee7c29f2b83173d9cf9e24f77b7de8da4970749cbace0afddba3bbb7ec3134d03e0a68c4130160819ddf30f8891b9da1a20b2c61f076e60#npm:9.39.3"],\
           ["eslint-plugin-react-hooks", "virtual:4df0a82f9f1edddc7ee7c29f2b83173d9cf9e24f77b7de8da4970749cbace0afddba3bbb7ec3134d03e0a68c4130160819ddf30f8891b9da1a20b2c61f076e60#npm:7.0.1"],\
           ["eslint-plugin-react-refresh", "virtual:4df0a82f9f1edddc7ee7c29f2b83173d9cf9e24f77b7de8da4970749cbace0afddba3bbb7ec3134d03e0a68c4130160819ddf30f8891b9da1a20b2c61f076e60#npm:0.4.26"],\

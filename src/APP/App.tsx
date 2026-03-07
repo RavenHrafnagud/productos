@@ -12,6 +12,7 @@ import { InventorySection } from '../INVENTORY/components/InventorySection';
 import { ProductsSection } from '../PRODUCTS/components/ProductsSection';
 import { appEnv, isSupabaseConfigured } from '../SHARED/config/env';
 import { StatusState } from '../SHARED/ui/StatusState';
+import { isSetupError, toFriendlySupabaseMessage } from '../SHARED/utils/supabaseGuidance';
 import {
   ActionButton,
   AlertStrip,
@@ -42,6 +43,7 @@ export default function App() {
   }, [branches, selectedBranchId]);
 
   const currentUser = useMemo(() => session?.user?.email ?? 'Usuario autenticado', [session?.user?.email]);
+  const friendlyDashboardError = toFriendlySupabaseMessage(error, 'general');
 
   const handleRefresh = () => {
     setRefreshKey((prev) => prev + 1);
@@ -131,23 +133,32 @@ export default function App() {
       </Header>
 
       {(error || authError) && (
-        <AlertStrip>{error ?? authError ?? 'Ocurrio un error al cargar el tablero.'}</AlertStrip>
+        <AlertStrip>
+          {error
+            ? isSetupError(error)
+              ? friendlyDashboardError
+              : error
+            : authError ?? 'Ocurrio un error al cargar el tablero.'}
+        </AlertStrip>
       )}
 
       <Grid>
         <BranchesSection
-          selectedBranchId={selectedBranchId}
           branches={branches}
           status={status}
           error={error}
           createStatus={createStatus}
           createError={createError}
-          onSelectBranch={setSelectedBranchId}
           onCreateBranch={handleCreateBranch}
           onReload={reload}
         />
         <ProductsSection refreshKey={refreshKey} onProductCreated={handleRefresh} />
-        <InventorySection branchId={selectedBranchId} refreshKey={refreshKey} />
+        <InventorySection
+          branchId={selectedBranchId}
+          branches={branches}
+          onBranchChange={setSelectedBranchId}
+          refreshKey={refreshKey}
+        />
       </Grid>
     </Page>
   );

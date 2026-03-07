@@ -5,6 +5,7 @@
 import { FormEvent, useState } from 'react';
 import { useProducts } from '../hooks/useProducts';
 import { formatDateTime, formatMoney } from '../../SHARED/utils/format';
+import { isSetupError, toFriendlySupabaseMessage } from '../../SHARED/utils/supabaseGuidance';
 import { sanitizeText, toPositiveNumber } from '../../SHARED/utils/validators';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
 import {
@@ -46,6 +47,8 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
   const { products, status, error, createStatus, createError, addProduct, reload } = useProducts(refreshKey);
   const [form, setForm] = useState<ProductForm>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
+  const friendlyLoadError = toFriendlySupabaseMessage(error, 'productos');
+  const friendlyCreateError = toFriendlySupabaseMessage(createError, 'productos');
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -142,8 +145,11 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
           />
         </Field>
 
-        {(formError || createError) && (
-          <StatusState kind="error" message={formError ?? createError ?? 'Error inesperado.'} />
+        {(formError || friendlyCreateError) && (
+          <StatusState
+            kind={formError ? 'error' : isSetupError(createError) ? 'info' : 'error'}
+            message={formError ?? friendlyCreateError ?? 'Error inesperado.'}
+          />
         )}
         {createStatus === 'success' && <StatusState kind="info" message="Producto creado correctamente." />}
 
@@ -160,11 +166,16 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
       <Divider />
 
       {status === 'loading' && <StatusState kind="loading" message="Cargando productos..." />}
-      {status === 'error' && <StatusState kind="error" message={error ?? 'Error inesperado.'} />}
+      {status === 'error' && (
+        <StatusState
+          kind={isSetupError(error) ? 'info' : 'error'}
+          message={friendlyLoadError ?? 'Error inesperado.'}
+        />
+      )}
       {status === 'success' && products.length === 0 && (
         <StatusState
           kind="empty"
-          message="Aun no hay productos. Usa el formulario para registrar el primero."
+          message="Primero crea tu primer producto usando el formulario."
         />
       )}
 

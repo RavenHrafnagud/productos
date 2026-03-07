@@ -3,8 +3,10 @@
  * Permite cargar stock inicial y visualizar disponibilidad de cada producto.
  */
 import { FormEvent, useMemo, useState } from 'react';
+import type { Branch } from '../../BRANCHES/types/Branch';
 import { useProducts } from '../../PRODUCTS/hooks/useProducts';
 import { formatDateTime } from '../../SHARED/utils/format';
+import { isSetupError, toFriendlySupabaseMessage } from '../../SHARED/utils/supabaseGuidance';
 import { toPositiveNumber } from '../../SHARED/utils/validators';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
 import {
@@ -23,6 +25,8 @@ import { useInventory } from '../hooks/useInventory';
 
 interface InventorySectionProps {
   branchId: string;
+  branches: Branch[];
+  onBranchChange: (branchId: string) => void;
   refreshKey: number;
 }
 
@@ -38,7 +42,7 @@ const EMPTY_FORM: InventoryForm = {
   minQty: '',
 };
 
-export function InventorySection({ branchId, refreshKey }: InventorySectionProps) {
+export function InventorySection({ branchId, branches, onBranchChange, refreshKey }: InventorySectionProps) {
   const { products } = useProducts(refreshKey);
   const { inventory, status, error, saveStatus, saveError, saveRow, reload } = useInventory(
     branchId,
@@ -46,10 +50,23 @@ export function InventorySection({ branchId, refreshKey }: InventorySectionProps
   );
   const [form, setForm] = useState<InventoryForm>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
+  const friendlyLoadError = toFriendlySupabaseMessage(error, 'inventario');
+  const friendlySaveError = toFriendlySupabaseMessage(saveError, 'inventario');
 
   const productOptions = useMemo(
     () => products.filter((product) => product.activo).map((product) => ({ id: product.id, name: product.nombre })),
     [products],
+  );
+  const branchOptions = useMemo(
+    () =>
+      branches
+        .filter((branch) => branch.activo)
+        .map((branch) => ({ id: branch.id, name: branch.nombre })),
+    [branches],
+  );
+  const selectedBranchName = useMemo(
+    () => branches.find((branch) => branch.id === branchId)?.nombre ?? '',
+    [branchId, branches],
   );
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -90,10 +107,26 @@ export function InventorySection({ branchId, refreshKey }: InventorySectionProps
     <SectionCard>
       <SectionHeader>
         <SectionTitle>Inventario</SectionTitle>
-        <SectionMeta>{branchId ? 'Gestionando stock de la sucursal seleccionada' : 'Sin sucursal activa'}</SectionMeta>
+        <SectionMeta>
+          {branchId && selectedBranchName
+            ? `Sucursal activa: ${selectedBranchName}`
+            : 'Sin sucursal activa'}
+        </SectionMeta>
       </SectionHeader>
 
       <FormGrid onSubmit={handleSubmit}>
+        <Field>
+          Sucursal
+          <SelectControl value={branchId} onChange={(event) => onBranchChange(event.target.value)}>
+            <option value="">Selecciona una sucursal</option>
+            {branchOptions.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </SelectControl>
+        </Field>
+
         <Field>
           Producto
           <SelectControl
@@ -131,8 +164,11 @@ export function InventorySection({ branchId, refreshKey }: InventorySectionProps
           />
         </Field>
 
-        {(formError || saveError) && (
-          <StatusState kind="error" message={formError ?? saveError ?? 'Error inesperado.'} />
+        {(formError || friendlySaveError) && (
+          <StatusState
+            kind={formError ? 'error' : isSetupError(saveError) ? 'info' : 'error'}
+            message={formError ?? friendlySaveError ?? 'Error inesperado.'}
+          />
         )}
         {saveStatus === 'success' && <StatusState kind="info" message="Inventario actualizado." />}
 
@@ -150,11 +186,16 @@ export function InventorySection({ branchId, refreshKey }: InventorySectionProps
 
       {!branchId && <StatusState kind="info" message="Primero selecciona o crea una sucursal." />}
       {branchId && status === 'loading' && <StatusState kind="loading" message="Cargando inventario..." />}
-      {branchId && status === 'error' && <StatusState kind="error" message={error ?? 'Error inesperado.'} />}
+      {branchId && status === 'error' && (
+        <StatusState
+          kind={isSetupError(error) ? 'info' : 'error'}
+          message={friendlyLoadError ?? 'Error inesperado.'}
+        />
+      )}
       {branchId && status === 'success' && inventory.length === 0 && (
         <StatusState
           kind="empty"
-          message="No hay stock cargado para esta sucursal. Usa el formulario para iniciar."
+          message="Primero crea productos y luego carga las existencias iniciales."
         />
       )}
 
