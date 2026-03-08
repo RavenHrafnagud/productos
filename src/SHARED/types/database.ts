@@ -47,9 +47,8 @@ export interface Database {
           codigo_barra: string | null;
           nombre: string;
           descripcion: string | null;
-          precio_compra: number;
           precio_venta: number;
-          activo: boolean;
+          estado: boolean;
           created_at: string;
           updated_at: string;
         },
@@ -58,9 +57,8 @@ export interface Database {
           codigo_barra?: string | null;
           nombre: string;
           descripcion?: string | null;
-          precio_compra: number;
           precio_venta: number;
-          activo?: boolean;
+          estado?: boolean;
         }
       >;
     };

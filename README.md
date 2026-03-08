@@ -26,6 +26,7 @@ database/
   005_fix_admin_branch_permissions.sql  # corrige permisos RLS para sucursales
   006_update_locales_estado.sql  # elimina gerente_persona_id y renombra activo->estado
   007_secure_delete_helpers.sql  # funciones seguras para eliminar productos/sucursales en cascada
+  008_update_productos_estado.sql  # elimina precio_compra y renombra activo->estado en productos
 ```
 
 ## Configuracion local

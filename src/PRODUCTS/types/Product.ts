@@ -6,9 +6,8 @@ export interface Product {
   codigoBarra: string | null;
   nombre: string;
   descripcion: string | null;
-  precioCompra: number;
   precioVenta: number;
-  activo: boolean;
+  estado: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -20,6 +19,11 @@ export interface CreateProductInput {
   codigoBarra: string;
   nombre: string;
   descripcion: string;
-  precioCompra: number;
   precioVenta: number;
+  estado: boolean;
 }
+
+/**
+ * Payload de actualizacion de producto.
+ */
+export interface UpdateProductInput extends CreateProductInput {}

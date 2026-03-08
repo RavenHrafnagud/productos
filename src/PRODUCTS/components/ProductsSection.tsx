@@ -18,6 +18,7 @@ import {
   GhostButton,
   InputControl,
   PrimaryButton,
+  SelectControl,
   TextAreaControl,
 } from '../../SHARED/ui/FormControls';
 import { SectionCard, SectionHeader, SectionMeta, SectionTitle } from '../../SHARED/ui/SectionCard';
@@ -32,16 +33,16 @@ interface ProductForm {
   nombre: string;
   codigoBarra: string;
   descripcion: string;
-  precioCompra: string;
   precioVenta: string;
+  estado: boolean;
 }
 
 const EMPTY_FORM: ProductForm = {
   nombre: '',
   codigoBarra: '',
   descripcion: '',
-  precioCompra: '',
   precioVenta: '',
+  estado: true,
 };
 
 export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectionProps) {
@@ -51,24 +52,29 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
     error,
     createStatus,
     createError,
+    updateStatus,
+    updateError,
     deleteStatus,
     deleteError,
     addProduct,
+    editProduct,
     removeProduct,
     reload,
   } = useProducts(refreshKey);
   const [form, setForm] = useState<ProductForm>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const friendlyLoadError = toFriendlySupabaseMessage(error, 'productos');
   const friendlyCreateError = toFriendlySupabaseMessage(createError, 'productos');
+  const friendlyUpdateError = toFriendlySupabaseMessage(updateError, 'productos');
   const friendlyDeleteError = toFriendlySupabaseMessage(deleteError, 'productos');
+  const isSubmitting = createStatus === 'submitting' || updateStatus === 'submitting';
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
 
-    const precioCompra = toPositiveNumber(form.precioCompra);
     const precioVenta = toPositiveNumber(form.precioVenta);
     const nombre = sanitizeText(form.nombre, 120);
 
@@ -77,29 +83,52 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
       return;
     }
 
-    if (precioCompra === null || precioVenta === null) {
-      setFormError('Los precios deben ser numericos y mayores o iguales a cero.');
-      return;
-    }
-
-    if (precioVenta < precioCompra) {
-      setFormError('El precio de venta no debe ser menor al de compra.');
+    if (precioVenta === null) {
+      setFormError('El precio de venta debe ser numerico y mayor o igual a cero.');
       return;
     }
 
     try {
-      await addProduct({
+      const payload = {
         nombre,
         codigoBarra: sanitizeText(form.codigoBarra, 50),
         descripcion: sanitizeText(form.descripcion, 300),
-        precioCompra,
         precioVenta,
-      });
+        estado: form.estado,
+      };
+
+      if (editingProductId) {
+        await editProduct(editingProductId, payload);
+        setEditingProductId(null);
+      } else {
+        await addProduct(payload);
+      }
       setForm(EMPTY_FORM);
       onProductCreated?.();
     } catch {
-      // El detalle de error se refleja en createError.
+      // El detalle de error se refleja en createError/updateError.
     }
+  };
+
+  const handleStartEditProduct = (productId: string) => {
+    const product = products.find((item) => item.id === productId);
+    if (!product) return;
+
+    setEditingProductId(product.id);
+    setFormError(null);
+    setForm({
+      nombre: product.nombre,
+      codigoBarra: product.codigoBarra ?? '',
+      descripcion: product.descripcion ?? '',
+      precioVenta: String(product.precioVenta),
+      estado: product.estado,
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingProductId(null);
+    setFormError(null);
+    setForm(EMPTY_FORM);
   };
 
   const handleDeleteProduct = async (productId: string, productName: string) => {
@@ -111,6 +140,9 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
     setDeletingProductId(productId);
     try {
       await removeProduct(productId);
+      if (editingProductId === productId) {
+        handleCancelEdit();
+      }
       onProductCreated?.();
     } finally {
       setDeletingProductId(null);
@@ -144,16 +176,6 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
             />
           </Field>
           <Field>
-            Precio de compra
-            <InputControl
-              inputMode="decimal"
-              value={form.precioCompra}
-              onChange={(event) => setForm((prev) => ({ ...prev, precioCompra: event.target.value }))}
-              placeholder="50000"
-              required
-            />
-          </Field>
-          <Field>
             Precio de venta
             <InputControl
               inputMode="decimal"
@@ -162,6 +184,22 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
               placeholder="90000"
               required
             />
+          </Field>
+          <Field>
+            Estado
+            <SelectControl
+              value={form.estado ? 'ACTIVO' : 'INACTIVO'}
+              style={{ color: form.estado ? '#1d6046' : '#5d636a' }}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  estado: event.target.value === 'ACTIVO',
+                }))
+              }
+            >
+              <option value="ACTIVO">Activo</option>
+              <option value="INACTIVO">Inactivo</option>
+            </SelectControl>
           </Field>
         </Fields>
 
@@ -180,7 +218,14 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
             message={formError ?? friendlyCreateError ?? 'Error inesperado.'}
           />
         )}
+        {friendlyUpdateError && (
+          <StatusState
+            kind={isSetupError(updateError) ? 'info' : 'error'}
+            message={friendlyUpdateError}
+          />
+        )}
         {createStatus === 'success' && <StatusState kind="info" message="Producto creado correctamente." />}
+        {updateStatus === 'success' && <StatusState kind="info" message="Producto actualizado correctamente." />}
         {(friendlyDeleteError || deleteStatus === 'success') && (
           <StatusState
             kind={friendlyDeleteError ? 'error' : 'info'}
@@ -189,9 +234,14 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
         )}
 
         <ButtonsRow>
-          <PrimaryButton type="submit" disabled={createStatus === 'submitting'}>
-            {createStatus === 'submitting' ? 'Guardando...' : 'Registrar producto'}
+          <PrimaryButton type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Guardando...' : editingProductId ? 'Guardar cambios' : 'Registrar producto'}
           </PrimaryButton>
+          {editingProductId && (
+            <GhostButton type="button" onClick={handleCancelEdit}>
+              Cancelar edicion
+            </GhostButton>
+          )}
           <GhostButton type="button" onClick={() => reload()}>
             Actualizar catalogo
           </GhostButton>
@@ -221,7 +271,6 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
               <tr>
                 <th>Producto</th>
                 <th>Codigo</th>
-                <th>Compra</th>
                 <th>Venta</th>
                 <th>Estado</th>
                 <th>Actualizado</th>
@@ -233,24 +282,32 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
                 <tr key={product.id}>
                   <td>{product.nombre}</td>
                   <td>{product.codigoBarra ?? 'Sin codigo'}</td>
-                  <td>{formatMoney(product.precioCompra)}</td>
                   <td>{formatMoney(product.precioVenta)}</td>
                   <td>
-                    <Tag $tone={product.activo ? 'ok' : 'off'}>
-                      {product.activo ? 'Activo' : 'Inactivo'}
+                    <Tag $tone={product.estado ? 'ok' : 'off'}>
+                      {product.estado ? 'Activo' : 'Inactivo'}
                     </Tag>
                   </td>
                   <td>{formatDateTime(product.updatedAt)}</td>
                   <td>
-                    <DangerButton
-                      type="button"
-                      onClick={() => handleDeleteProduct(product.id, product.nombre)}
-                      disabled={deleteStatus === 'submitting'}
-                    >
-                      {deleteStatus === 'submitting' && deletingProductId === product.id
-                        ? 'Eliminando...'
-                        : 'Eliminar'}
-                    </DangerButton>
+                    <ButtonsRow>
+                      <GhostButton
+                        type="button"
+                        onClick={() => handleStartEditProduct(product.id)}
+                        disabled={deleteStatus === 'submitting'}
+                      >
+                        Editar
+                      </GhostButton>
+                      <DangerButton
+                        type="button"
+                        onClick={() => handleDeleteProduct(product.id, product.nombre)}
+                        disabled={deleteStatus === 'submitting'}
+                      >
+                        {deleteStatus === 'submitting' && deletingProductId === product.id
+                          ? 'Eliminando...'
+                          : 'Eliminar'}
+                      </DangerButton>
+                    </ButtonsRow>
                   </td>
                 </tr>
               ))}

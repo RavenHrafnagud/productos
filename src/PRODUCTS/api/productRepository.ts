@@ -4,12 +4,41 @@
  */
 import { getSupabaseClient } from '../../SHARED/lib/supabase/client';
 import { sanitizeText } from '../../SHARED/utils/validators';
-import type { CreateProductInput, Product } from '../types/Product';
+import type { CreateProductInput, Product, UpdateProductInput } from '../types/Product';
 
 const DEFAULT_LIMIT = 40;
+const PRODUCT_SELECT_WITH_STATE =
+  'id, codigo_barra, nombre, descripcion, precio_venta, estado, created_at, updated_at';
+const PRODUCT_SELECT_WITH_ACTIVE =
+  'id, codigo_barra, nombre, descripcion, precio_venta, activo, created_at, updated_at';
 
 function toNumber(value: number | string) {
   return typeof value === 'number' ? value : Number(value);
+}
+
+type ProductRow = {
+  id: string;
+  codigo_barra: string | null;
+  nombre: string;
+  descripcion: string | null;
+  precio_venta: number | string;
+  estado?: boolean | null;
+  activo?: boolean | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function mapProduct(row: ProductRow): Product {
+  return {
+    id: row.id,
+    codigoBarra: row.codigo_barra,
+    nombre: row.nombre,
+    descripcion: row.descripcion,
+    precioVenta: toNumber(row.precio_venta),
+    estado: row.estado ?? row.activo ?? true,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 function isMissingRelationError(error: { code?: string | null; message: string }) {
@@ -20,61 +49,68 @@ function isMissingRpcFunctionError(error: { code?: string | null; message: strin
   return error.code === 'PGRST202' || /Could not find the function/i.test(error.message);
 }
 
+function isCompatibilityColumnError(rawError: string) {
+  return /does not exist/i.test(rawError) && /(estado|activo|precio_compra)/i.test(rawError);
+}
+
 export async function listProducts(limit = DEFAULT_LIMIT): Promise<Product[]> {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .schema('catalogo')
-    .from('productos')
-    .select('id, codigo_barra, nombre, descripcion, precio_compra, precio_venta, activo, created_at, updated_at')
-    .order('updated_at', { ascending: false })
-    .limit(limit);
+  const selectAttempts = [PRODUCT_SELECT_WITH_STATE, PRODUCT_SELECT_WITH_ACTIVE];
+  let lastCompatibilityError: string | null = null;
 
-  if (error) {
-    throw new Error(`[PRODUCTS] ${error.message}`);
+  for (const selection of selectAttempts) {
+    const queryResult = await supabase
+      .schema('catalogo')
+      .from('productos')
+      .select(selection)
+      .order('updated_at', { ascending: false })
+      .limit(limit);
+
+    if (!queryResult.error) {
+      const rows = (queryResult.data ?? []) as unknown as ProductRow[];
+      return rows.map(mapProduct);
+    }
+
+    if (!isCompatibilityColumnError(queryResult.error.message)) {
+      throw new Error(`[PRODUCTS] ${queryResult.error.message}`);
+    }
+    lastCompatibilityError = queryResult.error.message;
   }
 
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    codigoBarra: row.codigo_barra,
-    nombre: row.nombre,
-    descripcion: row.descripcion,
-    precioCompra: toNumber(row.precio_compra),
-    precioVenta: toNumber(row.precio_venta),
-    activo: row.activo,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }));
+  throw new Error(`[PRODUCTS] ${lastCompatibilityError ?? 'No se pudo listar productos.'}`);
 }
 
 export async function getProductsByIds(ids: string[]): Promise<Map<string, Product>> {
   if (!ids.length) return new Map();
 
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .schema('catalogo')
-    .from('productos')
-    .select('id, codigo_barra, nombre, descripcion, precio_compra, precio_venta, activo, created_at, updated_at')
-    .in('id', ids);
+  const selectAttempts = [PRODUCT_SELECT_WITH_STATE, PRODUCT_SELECT_WITH_ACTIVE];
+  let lastCompatibilityError: string | null = null;
 
-  if (error) {
-    throw new Error(`[PRODUCTS] ${error.message}`);
+  for (const selection of selectAttempts) {
+    const queryResult = await supabase
+      .schema('catalogo')
+      .from('productos')
+      .select(selection)
+      .in('id', ids);
+
+    if (!queryResult.error) {
+      const productMap = new Map<string, Product>();
+      const rows = (queryResult.data ?? []) as unknown as ProductRow[];
+      for (const row of rows) {
+        const product = mapProduct(row);
+        productMap.set(product.id, product);
+      }
+      return productMap;
+    }
+
+    if (!isCompatibilityColumnError(queryResult.error.message)) {
+      throw new Error(`[PRODUCTS] ${queryResult.error.message}`);
+    }
+    lastCompatibilityError = queryResult.error.message;
   }
 
-  const productMap = new Map<string, Product>();
-  for (const row of data ?? []) {
-    productMap.set(row.id, {
-      id: row.id,
-      codigoBarra: row.codigo_barra,
-      nombre: row.nombre,
-      descripcion: row.descripcion,
-      precioCompra: toNumber(row.precio_compra),
-      precioVenta: toNumber(row.precio_venta),
-      activo: row.activo,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    });
-  }
-  return productMap;
+  throw new Error(`[PRODUCTS] ${lastCompatibilityError ?? 'No se pudieron leer productos por ids.'}`);
 }
 
 export async function createProduct(input: CreateProductInput): Promise<Product> {
@@ -83,37 +119,154 @@ export async function createProduct(input: CreateProductInput): Promise<Product>
     codigo_barra: sanitizeText(input.codigoBarra, 50) || null,
     nombre: sanitizeText(input.nombre, 120),
     descripcion: sanitizeText(input.descripcion, 300) || null,
-    precio_compra: input.precioCompra,
     precio_venta: input.precioVenta,
-    activo: true,
+    estado: input.estado,
   };
 
   if (!payload.nombre) {
     throw new Error('El nombre del producto es obligatorio.');
   }
 
-  const { data, error } = await supabase
-    .schema('catalogo')
-    .from('productos')
-    .insert(payload)
-    .select('id, codigo_barra, nombre, descripcion, precio_compra, precio_venta, activo, created_at, updated_at')
-    .single();
+  const insertAttempts: Array<{
+    payload: Record<string, string | number | boolean | null>;
+    selection: string;
+  }> = [
+    {
+      payload: {
+        codigo_barra: payload.codigo_barra,
+        nombre: payload.nombre,
+        descripcion: payload.descripcion,
+        precio_venta: payload.precio_venta,
+        estado: payload.estado,
+      },
+      selection: PRODUCT_SELECT_WITH_STATE,
+    },
+    {
+      // Compatibilidad temporal con esquemas antiguos antes de migrar a "estado".
+      payload: {
+        codigo_barra: payload.codigo_barra,
+        nombre: payload.nombre,
+        descripcion: payload.descripcion,
+        precio_venta: payload.precio_venta,
+        activo: payload.estado,
+      },
+      selection: PRODUCT_SELECT_WITH_ACTIVE,
+    },
+    {
+      // Compatibilidad temporal con esquemas antiguos que aun exigen precio_compra.
+      payload: {
+        codigo_barra: payload.codigo_barra,
+        nombre: payload.nombre,
+        descripcion: payload.descripcion,
+        precio_compra: payload.precio_venta,
+        precio_venta: payload.precio_venta,
+        activo: payload.estado,
+      },
+      selection: PRODUCT_SELECT_WITH_ACTIVE,
+    },
+  ];
+  let lastCompatibilityError: string | null = null;
 
-  if (error) {
-    throw new Error(`[PRODUCTS] ${error.message}`);
+  for (const attempt of insertAttempts) {
+    const insertResult = await supabase
+      .schema('catalogo')
+      .from('productos')
+      .insert(attempt.payload)
+      .select(attempt.selection)
+      .single();
+
+    if (!insertResult.error) {
+      return mapProduct(insertResult.data as unknown as ProductRow);
+    }
+
+    if (!isCompatibilityColumnError(insertResult.error.message)) {
+      throw new Error(`[PRODUCTS] ${insertResult.error.message}`);
+    }
+    lastCompatibilityError = insertResult.error.message;
   }
 
-  return {
-    id: data.id,
-    codigoBarra: data.codigo_barra,
-    nombre: data.nombre,
-    descripcion: data.descripcion,
-    precioCompra: toNumber(data.precio_compra),
-    precioVenta: toNumber(data.precio_venta),
-    activo: data.activo,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at,
+  throw new Error(`[PRODUCTS] ${lastCompatibilityError ?? 'No se pudo crear el producto.'}`);
+}
+
+export async function updateProduct(productId: string, input: UpdateProductInput): Promise<Product> {
+  const supabase = getSupabaseClient();
+  const normalizedId = productId.trim();
+  const payload = {
+    codigo_barra: sanitizeText(input.codigoBarra, 50) || null,
+    nombre: sanitizeText(input.nombre, 120),
+    descripcion: sanitizeText(input.descripcion, 300) || null,
+    precio_venta: input.precioVenta,
+    estado: input.estado,
   };
+
+  if (!normalizedId) {
+    throw new Error('No se recibio el identificador del producto.');
+  }
+
+  if (!payload.nombre) {
+    throw new Error('El nombre del producto es obligatorio.');
+  }
+
+  const updateAttempts: Array<{
+    payload: Record<string, string | number | boolean | null>;
+    selection: string;
+  }> = [
+    {
+      payload: {
+        codigo_barra: payload.codigo_barra,
+        nombre: payload.nombre,
+        descripcion: payload.descripcion,
+        precio_venta: payload.precio_venta,
+        estado: payload.estado,
+      },
+      selection: PRODUCT_SELECT_WITH_STATE,
+    },
+    {
+      // Compatibilidad temporal con esquemas antiguos antes de migrar a "estado".
+      payload: {
+        codigo_barra: payload.codigo_barra,
+        nombre: payload.nombre,
+        descripcion: payload.descripcion,
+        precio_venta: payload.precio_venta,
+        activo: payload.estado,
+      },
+      selection: PRODUCT_SELECT_WITH_ACTIVE,
+    },
+    {
+      // Compatibilidad temporal con esquemas antiguos que aun exigen precio_compra.
+      payload: {
+        codigo_barra: payload.codigo_barra,
+        nombre: payload.nombre,
+        descripcion: payload.descripcion,
+        precio_compra: payload.precio_venta,
+        precio_venta: payload.precio_venta,
+        activo: payload.estado,
+      },
+      selection: PRODUCT_SELECT_WITH_ACTIVE,
+    },
+  ];
+  let lastCompatibilityError: string | null = null;
+
+  for (const attempt of updateAttempts) {
+    const updateResult = await supabase
+      .schema('catalogo')
+      .from('productos')
+      .update(attempt.payload)
+      .eq('id', normalizedId)
+      .select(attempt.selection)
+      .single();
+
+    if (!updateResult.error) {
+      return mapProduct(updateResult.data as unknown as ProductRow);
+    }
+
+    if (!isCompatibilityColumnError(updateResult.error.message)) {
+      throw new Error(`[PRODUCTS] ${updateResult.error.message}`);
+    }
+    lastCompatibilityError = updateResult.error.message;
+  }
+
+  throw new Error(`[PRODUCTS] ${lastCompatibilityError ?? 'No se pudo actualizar el producto.'}`);
 }
 
 export async function deleteProduct(productId: string) {

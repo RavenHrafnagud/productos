@@ -3,8 +3,8 @@
  * Permite poblar catalogo desde una base inicialmente vacia.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { createProduct, deleteProduct, listProducts } from '../api/productRepository';
-import type { CreateProductInput, Product } from '../types/Product';
+import { createProduct, deleteProduct, listProducts, updateProduct } from '../api/productRepository';
+import type { CreateProductInput, Product, UpdateProductInput } from '../types/Product';
 
 interface UseProductsResult {
   products: Product[];
@@ -12,10 +12,13 @@ interface UseProductsResult {
   error: string | null;
   createStatus: 'idle' | 'submitting' | 'success' | 'error';
   createError: string | null;
+  updateStatus: 'idle' | 'submitting' | 'success' | 'error';
+  updateError: string | null;
   deleteStatus: 'idle' | 'submitting' | 'success' | 'error';
   deleteError: string | null;
   reload: () => Promise<void>;
   addProduct: (input: CreateProductInput) => Promise<void>;
+  editProduct: (productId: string, input: UpdateProductInput) => Promise<void>;
   removeProduct: (productId: string) => Promise<void>;
 }
 
@@ -25,6 +28,8 @@ export function useProducts(refreshKey: number): UseProductsResult {
   const [error, setError] = useState<string | null>(null);
   const [createStatus, setCreateStatus] = useState<UseProductsResult['createStatus']>('idle');
   const [createError, setCreateError] = useState<string | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UseProductsResult['updateStatus']>('idle');
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteStatus, setDeleteStatus] = useState<UseProductsResult['deleteStatus']>('idle');
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -55,6 +60,22 @@ export function useProducts(refreshKey: number): UseProductsResult {
     }
   }, []);
 
+  const editProduct = useCallback(async (productId: string, input: UpdateProductInput) => {
+    setUpdateStatus('submitting');
+    setUpdateError(null);
+    try {
+      const updatedProduct = await updateProduct(productId, input);
+      setProducts((prev) =>
+        prev.map((product) => (product.id === productId ? updatedProduct : product)),
+      );
+      setUpdateStatus('success');
+    } catch (err) {
+      setUpdateStatus('error');
+      setUpdateError(err instanceof Error ? err.message : 'No se pudo actualizar el producto.');
+      throw err;
+    }
+  }, []);
+
   const removeProduct = useCallback(async (productId: string) => {
     setDeleteStatus('submitting');
     setDeleteError(null);
@@ -79,10 +100,13 @@ export function useProducts(refreshKey: number): UseProductsResult {
     error,
     createStatus,
     createError,
+    updateStatus,
+    updateError,
     deleteStatus,
     deleteError,
     reload,
     addProduct,
+    editProduct,
     removeProduct,
   };
 }

@@ -68,7 +68,7 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
   const friendlyDeleteError = toFriendlySupabaseMessage(deleteError, 'inventario');
 
   const productOptions = useMemo(
-    () => products.filter((product) => product.activo).map((product) => ({ id: product.id, name: product.nombre })),
+    () => products.filter((product) => product.estado).map((product) => ({ id: product.id, name: product.nombre })),
     [products],
   );
   const branchOptions = useMemo(
