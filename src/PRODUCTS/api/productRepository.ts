@@ -308,15 +308,15 @@ export async function deleteProduct(productId: string) {
     throw new Error(`[PRODUCTS] ${deleteInventoryError.message}`);
   }
 
-  // Limpia detalle de ventas del producto (si el modulo existe).
-  const { error: deleteDetailsError } = await supabase
+  // Limpia ventas relacionadas al producto con modelo integrado (si el modulo existe).
+  const { error: deleteSalesError } = await supabase
     .schema('ventas')
-    .from('detalle_venta')
+    .from('ventas')
     .delete()
     .eq('producto_id', normalizedId);
 
-  if (deleteDetailsError && !isMissingRelationError(deleteDetailsError)) {
-    throw new Error(`[PRODUCTS] ${deleteDetailsError.message}`);
+  if (deleteSalesError && !isMissingRelationError(deleteSalesError)) {
+    throw new Error(`[PRODUCTS] ${deleteSalesError.message}`);
   }
 
   const { error } = await supabase

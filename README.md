@@ -27,6 +27,10 @@ database/
   006_update_locales_estado.sql  # elimina gerente_persona_id y renombra activo->estado
   007_secure_delete_helpers.sql  # funciones seguras para eliminar productos/sucursales en cascada
   008_update_productos_estado.sql  # elimina precio_compra y renombra activo->estado en productos
+  009_drop_usuario_locales.sql  # elimina la tabla operaciones.usuario_locales y FKs relacionadas
+  010_merge_detalle_venta_into_ventas.sql  # integra detalle_venta en ventas y elimina tablas legacy
+  011_fix_operaciones_rls_after_usuario_locales.sql  # repara politicas RLS de operaciones para admins
+  012_update_movimientos_usuario_id.sql  # cambia persona_id por usuarios_id en movimientos_inventario
 ```
 
 ## Configuracion local
@@ -49,7 +53,7 @@ Para crear el administrador solicitado, ejecuta en Supabase SQL Editor:
 
 - Archivo: `database/001_bootstrap_admin.sql`
 - Correo creado: `hrafnfreistudrr@gmail.com`
-- Contraseña configurada: `$%&Heimdallr-Emperatriz123$%&`
+- Contrasena configurada: `$%&Heimdallr-Emperatriz123$%&`
 
 El script:
 - crea/actualiza usuario en `auth.users` con hash seguro (`crypt` + `gen_salt`),
@@ -78,3 +82,4 @@ El script:
 
 La seguridad final depende de tu configuracion de RLS/policies en Supabase.  
 Este frontend ya esta preparado para trabajar con esas politicas de forma segura.
+

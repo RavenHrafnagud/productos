@@ -13,6 +13,20 @@ export interface InventoryItem {
 }
 
 /**
+ * Modelo de movimiento de inventario usado por UI.
+ */
+export interface InventoryMovement {
+  id: string;
+  productoId: string;
+  productoNombre: string;
+  sucursalId: string;
+  tipoMovimiento: 'ENTRADA' | 'SALIDA' | 'AJUSTE';
+  cantidad: number;
+  fecha: string;
+  motivo: string | null;
+}
+
+/**
  * Payload para ajustar o crear inventario inicial.
  */
 export interface SaveInventoryInput {

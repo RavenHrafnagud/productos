@@ -47,6 +47,7 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
   const { products } = useProducts(refreshKey);
   const {
     inventory,
+    movements,
     status,
     error,
     saveStatus,
@@ -62,6 +63,7 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
   );
   const [form, setForm] = useState<InventoryForm>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
+  const [editingInventoryId, setEditingInventoryId] = useState<string | null>(null);
   const [deletingInventoryId, setDeletingInventoryId] = useState<string | null>(null);
   const friendlyLoadError = toFriendlySupabaseMessage(error, 'inventario');
   const friendlySaveError = toFriendlySupabaseMessage(saveError, 'inventario');
@@ -81,6 +83,13 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
   const selectedBranchName = useMemo(
     () => branches.find((branch) => branch.id === branchId)?.nombre ?? '',
     [branchId, branches],
+  );
+  const branchesById = useMemo(
+    () =>
+      new Map(
+        branches.map((branch) => [branch.id, branch.nombre]),
+      ),
+    [branches],
   );
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -112,9 +121,32 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
         cantidadMinima,
       });
       setForm(EMPTY_FORM);
+      setEditingInventoryId(null);
     } catch {
       // El error principal se comunica con saveError.
     }
+  };
+
+  const handleStartEditInventory = (item: {
+    id: string;
+    productoId: string;
+    cantidadActual: number;
+    cantidadMinima: number;
+  }) => {
+    // Carga los datos de la fila seleccionada para edicion en el formulario.
+    setEditingInventoryId(item.id);
+    setFormError(null);
+    setForm({
+      productId: item.productoId,
+      currentQty: String(item.cantidadActual),
+      minQty: String(item.cantidadMinima),
+    });
+  };
+
+  const handleCancelEditInventory = () => {
+    setEditingInventoryId(null);
+    setFormError(null);
+    setForm(EMPTY_FORM);
   };
 
   const handleDeleteInventory = async (input: {
@@ -169,6 +201,7 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
           <SelectControl
             value={form.productId}
             onChange={(event) => setForm((prev) => ({ ...prev, productId: event.target.value }))}
+            disabled={Boolean(editingInventoryId)}
           >
             <option value="">Selecciona un producto</option>
             {productOptions.map((product) => (
@@ -217,8 +250,17 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
 
         <ButtonsRow>
           <PrimaryButton type="submit" disabled={saveStatus === 'submitting'}>
-            {saveStatus === 'submitting' ? 'Guardando...' : 'Guardar stock'}
+            {saveStatus === 'submitting'
+              ? 'Guardando...'
+              : editingInventoryId
+                ? 'Guardar cambios'
+                : 'Guardar stock'}
           </PrimaryButton>
+          {editingInventoryId && (
+            <GhostButton type="button" onClick={handleCancelEditInventory}>
+              Cancelar edicion
+            </GhostButton>
+          )}
           <GhostButton type="button" onClick={() => reload()}>
             Actualizar lista
           </GhostButton>
@@ -270,22 +312,38 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
                     </td>
                     <td>{formatDateTime(item.updatedAt)}</td>
                     <td>
-                      <DangerButton
-                        type="button"
-                        onClick={() =>
-                          handleDeleteInventory({
-                            inventarioId: item.id,
-                            productoId: item.productoId,
-                            sucursalId: item.sucursalId,
-                            productoNombre: item.productoNombre,
-                          })
-                        }
-                        disabled={deleteStatus === 'submitting'}
-                      >
-                        {deleteStatus === 'submitting' && deletingInventoryId === item.id
-                          ? 'Eliminando...'
-                          : 'Eliminar'}
-                      </DangerButton>
+                      <ButtonsRow>
+                        <GhostButton
+                          type="button"
+                          onClick={() =>
+                            handleStartEditInventory({
+                              id: item.id,
+                              productoId: item.productoId,
+                              cantidadActual: item.cantidadActual,
+                              cantidadMinima: item.cantidadMinima,
+                            })
+                          }
+                          disabled={deleteStatus === 'submitting' || saveStatus === 'submitting'}
+                        >
+                          Editar
+                        </GhostButton>
+                        <DangerButton
+                          type="button"
+                          onClick={() =>
+                            handleDeleteInventory({
+                              inventarioId: item.id,
+                              productoId: item.productoId,
+                              sucursalId: item.sucursalId,
+                              productoNombre: item.productoNombre,
+                            })
+                          }
+                          disabled={deleteStatus === 'submitting' || saveStatus === 'submitting'}
+                        >
+                          {deleteStatus === 'submitting' && deletingInventoryId === item.id
+                            ? 'Eliminando...'
+                            : 'Eliminar'}
+                        </DangerButton>
+                      </ButtonsRow>
                     </td>
                   </tr>
                 );
@@ -293,6 +351,59 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
             </tbody>
           </DataTable>
         </TableWrap>
+      )}
+
+      {branchId && status === 'success' && (
+        <>
+          <Divider />
+          <SectionHeader>
+            <SectionTitle>Movimientos recientes</SectionTitle>
+            <SectionMeta>{movements.length} registrados</SectionMeta>
+          </SectionHeader>
+
+          {movements.length === 0 && (
+            <StatusState kind="empty" message="Aun no hay movimientos para esta sucursal." />
+          )}
+
+          {movements.length > 0 && (
+            <TableWrap>
+              <DataTable>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Sucursal</th>
+                    <th>Producto</th>
+                    <th>Tipo</th>
+                    <th>Cantidad</th>
+                    <th>Motivo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {movements.map((movement) => {
+                    const tone =
+                      movement.tipoMovimiento === 'ENTRADA'
+                        ? 'ok'
+                        : movement.tipoMovimiento === 'SALIDA'
+                          ? 'warn'
+                          : 'off';
+                    return (
+                      <tr key={movement.id}>
+                        <td>{formatDateTime(movement.fecha)}</td>
+                        <td>{branchesById.get(movement.sucursalId) ?? 'Sucursal no encontrada'}</td>
+                        <td>{movement.productoNombre}</td>
+                        <td>
+                          <Tag $tone={tone}>{movement.tipoMovimiento}</Tag>
+                        </td>
+                        <td>{movement.cantidad}</td>
+                        <td>{movement.motivo ?? 'Sin motivo'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </DataTable>
+            </TableWrap>
+          )}
+        </>
       )}
     </SectionCard>
   );

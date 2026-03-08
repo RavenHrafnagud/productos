@@ -3,11 +3,17 @@
  * Administra lectura y registro de stock desde la interfaz.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { deleteInventoryRow, listInventoryByBranch, saveInventory } from '../api/inventoryRepository';
-import type { InventoryItem, SaveInventoryInput } from '../types/InventoryItem';
+import {
+  deleteInventoryRow,
+  listInventoryByBranch,
+  listMovementsByBranch,
+  saveInventory,
+} from '../api/inventoryRepository';
+import type { InventoryItem, InventoryMovement, SaveInventoryInput } from '../types/InventoryItem';
 
 interface UseInventoryResult {
   inventory: InventoryItem[];
+  movements: InventoryMovement[];
   status: 'idle' | 'loading' | 'success' | 'error';
   error: string | null;
   saveStatus: 'idle' | 'submitting' | 'success' | 'error';
@@ -21,6 +27,7 @@ interface UseInventoryResult {
 
 export function useInventory(branchId: string, refreshKey: number): UseInventoryResult {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [status, setStatus] = useState<UseInventoryResult['status']>('idle');
   const [error, setError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<UseInventoryResult['saveStatus']>('idle');
@@ -31,6 +38,7 @@ export function useInventory(branchId: string, refreshKey: number): UseInventory
   const reload = useCallback(async () => {
     if (!branchId.trim()) {
       setInventory([]);
+      setMovements([]);
       setStatus('idle');
       setError(null);
       return;
@@ -39,8 +47,12 @@ export function useInventory(branchId: string, refreshKey: number): UseInventory
     setStatus('loading');
     setError(null);
     try {
-      const rows = await listInventoryByBranch(branchId);
-      setInventory(rows);
+      const [inventoryRows, movementRows] = await Promise.all([
+        listInventoryByBranch(branchId),
+        listMovementsByBranch(branchId),
+      ]);
+      setInventory(inventoryRows);
+      setMovements(movementRows);
       setStatus('success');
     } catch (err) {
       setStatus('error');
@@ -88,6 +100,7 @@ export function useInventory(branchId: string, refreshKey: number): UseInventory
 
   return {
     inventory,
+    movements,
     status,
     error,
     saveStatus,

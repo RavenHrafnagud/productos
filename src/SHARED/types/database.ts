@@ -115,7 +115,7 @@ export interface Database {
           id: number;
           producto_id: string;
           local_id: string;
-          persona_id: string | null;
+          usuarios_id: string | null;
           tipo_movimiento: 'ENTRADA' | 'SALIDA' | 'AJUSTE';
           cantidad: number;
           fecha: string;
@@ -126,7 +126,7 @@ export interface Database {
         {
           producto_id: string;
           local_id: string;
-          persona_id?: string | null;
+          usuarios_id?: string | null;
           tipo_movimiento: 'ENTRADA' | 'SALIDA' | 'AJUSTE';
           cantidad: number;
           fecha?: string;
@@ -143,6 +143,9 @@ export interface Database {
         {
           id: string;
           local_id: string;
+          producto_id: string | null;
+          cantidad: number | null;
+          precio_unitario: number | null;
           fecha: string;
           estado: 'BORRADOR' | 'CONFIRMADA' | 'ANULADA';
           total: number;
@@ -151,6 +154,9 @@ export interface Database {
         {
           id?: string;
           local_id: string;
+          producto_id?: string | null;
+          cantidad?: number | null;
+          precio_unitario?: number | null;
           fecha?: string;
           estado?: 'BORRADOR' | 'CONFIRMADA' | 'ANULADA';
           total?: number;

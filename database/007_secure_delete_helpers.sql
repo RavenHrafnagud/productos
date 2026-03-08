@@ -11,7 +11,17 @@ security definer
 set search_path = public, catalogo, operaciones, ventas
 as $$
 begin
-  if to_regclass('ventas.detalle_venta') is not null then
+  -- Modelo nuevo: ventas.producto_id integrado.
+  if to_regclass('ventas.ventas') is not null and exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'ventas'
+      and table_name = 'ventas'
+      and column_name = 'producto_id'
+  ) then
+    execute 'delete from ventas.ventas where producto_id = $1' using p_product_id;
+  -- Compatibilidad temporal con modelos legacy.
+  elsif to_regclass('ventas.detalle_venta') is not null then
     execute 'delete from ventas.detalle_venta where producto_id = $1' using p_product_id;
   elsif to_regclass('ventas.detalle_ventas') is not null then
     execute 'delete from ventas.detalle_ventas where producto_id = $1' using p_product_id;
@@ -41,6 +51,7 @@ set search_path = public, catalogo, operaciones, ventas
 as $$
 begin
   if to_regclass('ventas.ventas') is not null then
+    -- Si aun existe detalle de venta legacy, lo limpia antes de borrar ventas.
     if to_regclass('ventas.detalle_venta') is not null then
       execute
         'delete from ventas.detalle_venta where venta_id in (select id from ventas.ventas where local_id = $1)'

@@ -15,6 +15,24 @@ const BRANCH_SELECT_WITH_LOCALITY_AND_ACTIVE =
   'id, nit, nombre, direccion, localidad, ciudad, pais, telefono, email, activo, created_at';
 const BRANCH_SELECT_WITHOUT_LOCALITY_AND_ACTIVE =
   'id, nit, nombre, direccion, ciudad, pais, telefono, email, activo, created_at';
+const BRANCH_SELECT_WITH_LOCALITY_AND_STATE_LEGACY_DATE =
+  'id, nit, nombre, direccion, localidad, ciudad, pais, telefono, email, estado, fecha_creacion';
+const BRANCH_SELECT_WITHOUT_LOCALITY_AND_STATE_LEGACY_DATE =
+  'id, nit, nombre, direccion, ciudad, pais, telefono, email, estado, fecha_creacion';
+const BRANCH_SELECT_WITH_LOCALITY_AND_ACTIVE_LEGACY_DATE =
+  'id, nit, nombre, direccion, localidad, ciudad, pais, telefono, email, activo, fecha_creacion';
+const BRANCH_SELECT_WITHOUT_LOCALITY_AND_ACTIVE_LEGACY_DATE =
+  'id, nit, nombre, direccion, ciudad, pais, telefono, email, activo, fecha_creacion';
+const BRANCH_SELECT_ATTEMPTS = [
+  BRANCH_SELECT_WITH_LOCALITY_AND_STATE,
+  BRANCH_SELECT_WITHOUT_LOCALITY_AND_STATE,
+  BRANCH_SELECT_WITH_LOCALITY_AND_ACTIVE,
+  BRANCH_SELECT_WITHOUT_LOCALITY_AND_ACTIVE,
+  BRANCH_SELECT_WITH_LOCALITY_AND_STATE_LEGACY_DATE,
+  BRANCH_SELECT_WITHOUT_LOCALITY_AND_STATE_LEGACY_DATE,
+  BRANCH_SELECT_WITH_LOCALITY_AND_ACTIVE_LEGACY_DATE,
+  BRANCH_SELECT_WITHOUT_LOCALITY_AND_ACTIVE_LEGACY_DATE,
+];
 
 type BranchRow = {
   id: string;
@@ -28,7 +46,8 @@ type BranchRow = {
   email: string | null;
   estado?: boolean | null;
   activo?: boolean | null;
-  created_at: string;
+  created_at?: string | null;
+  fecha_creacion?: string | null;
 };
 
 function mapBranch(row: BranchRow): Branch {
@@ -43,12 +62,12 @@ function mapBranch(row: BranchRow): Branch {
     telefono: row.telefono,
     email: row.email,
     estado: row.estado ?? row.activo ?? true,
-    createdAt: row.created_at,
+    createdAt: row.created_at ?? row.fecha_creacion ?? new Date().toISOString(),
   };
 }
 
 function isCompatibilityColumnError(rawError: string) {
-  return /does not exist/i.test(rawError) && /(localidad|estado|activo)/i.test(rawError);
+  return /does not exist/i.test(rawError) && /(localidad|estado|activo|created_at|fecha_creacion)/i.test(rawError);
 }
 
 function isMissingRelationError(error: { code?: string | null; message: string }) {
@@ -59,17 +78,38 @@ function isMissingRpcFunctionError(error: { code?: string | null; message: strin
   return error.code === 'PGRST202' || /Could not find the function/i.test(error.message);
 }
 
-export async function listBranches() {
-  const supabase = getSupabaseClient();
-  const selectAttempts = [
-    BRANCH_SELECT_WITH_LOCALITY_AND_STATE,
-    BRANCH_SELECT_WITHOUT_LOCALITY_AND_STATE,
-    BRANCH_SELECT_WITH_LOCALITY_AND_ACTIVE,
-    BRANCH_SELECT_WITHOUT_LOCALITY_AND_ACTIVE,
-  ];
+async function findBranchById(supabase: ReturnType<typeof getSupabaseClient>, branchId: string) {
   let lastCompatibilityError: string | null = null;
 
-  for (const selection of selectAttempts) {
+  for (const selection of BRANCH_SELECT_ATTEMPTS) {
+    const queryResult = await supabase
+      .schema('operaciones')
+      .from('locales')
+      .select(selection)
+      .eq('id', branchId)
+      .maybeSingle();
+
+    if (!queryResult.error) {
+      if (!queryResult.data) {
+        throw new Error('[BRANCHES] No se encontro la sucursal luego de guardar.');
+      }
+      return mapBranch(queryResult.data as unknown as BranchRow);
+    }
+
+    if (!isCompatibilityColumnError(queryResult.error.message)) {
+      throw new Error(`[BRANCHES] ${queryResult.error.message}`);
+    }
+    lastCompatibilityError = queryResult.error.message;
+  }
+
+  throw new Error(`[BRANCHES] ${lastCompatibilityError ?? 'No fue posible leer la sucursal guardada.'}`);
+}
+
+export async function listBranches() {
+  const supabase = getSupabaseClient();
+  let lastCompatibilityError: string | null = null;
+
+  for (const selection of BRANCH_SELECT_ATTEMPTS) {
     const queryResult = await supabase
       .schema('operaciones')
       .from('locales')
@@ -115,63 +155,48 @@ export async function createBranch(input: CreateBranchInput) {
     throw new Error('NIT, nombre, pais, ciudad y barrio/localidad son obligatorios.');
   }
 
-  const insertAttempts: Array<{
-    payload: Record<string, string | boolean | null>;
-    selection: string;
-  }> = [
+  const insertAttempts: Array<Record<string, string | boolean | null>> = [
     {
-      payload: {
-        nit: payload.nit,
-        nombre: payload.nombre,
-        direccion: payload.direccion,
-        ciudad: payload.ciudad,
-        localidad: payload.localidad,
-        pais: payload.pais,
-        telefono: payload.telefono,
-        email: payload.email,
-        estado: payload.estado,
-      },
-      selection: BRANCH_SELECT_WITH_LOCALITY_AND_STATE,
+      nit: payload.nit,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      localidad: payload.localidad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      estado: payload.estado,
     },
     {
-      payload: {
-        nit: payload.nit,
-        nombre: payload.nombre,
-        direccion: payload.direccion,
-        ciudad: payload.ciudad,
-        pais: payload.pais,
-        telefono: payload.telefono,
-        email: payload.email,
-        estado: payload.estado,
-      },
-      selection: BRANCH_SELECT_WITHOUT_LOCALITY_AND_STATE,
+      nit: payload.nit,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      estado: payload.estado,
     },
     {
-      payload: {
-        nit: payload.nit,
-        nombre: payload.nombre,
-        direccion: payload.direccion,
-        ciudad: payload.ciudad,
-        localidad: payload.localidad,
-        pais: payload.pais,
-        telefono: payload.telefono,
-        email: payload.email,
-        activo: payload.estado,
-      },
-      selection: BRANCH_SELECT_WITH_LOCALITY_AND_ACTIVE,
+      nit: payload.nit,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      localidad: payload.localidad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      activo: payload.estado,
     },
     {
-      payload: {
-        nit: payload.nit,
-        nombre: payload.nombre,
-        direccion: payload.direccion,
-        ciudad: payload.ciudad,
-        pais: payload.pais,
-        telefono: payload.telefono,
-        email: payload.email,
-        activo: payload.estado,
-      },
-      selection: BRANCH_SELECT_WITHOUT_LOCALITY_AND_ACTIVE,
+      nit: payload.nit,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      activo: payload.estado,
     },
   ];
   let lastCompatibilityError: string | null = null;
@@ -180,12 +205,12 @@ export async function createBranch(input: CreateBranchInput) {
     const insertResult = await supabase
       .schema('operaciones')
       .from('locales')
-      .insert(attempt.payload)
-      .select(attempt.selection)
+      .insert(attempt)
+      .select('id')
       .single();
 
     if (!insertResult.error) {
-      return mapBranch(insertResult.data as unknown as BranchRow);
+      return findBranchById(supabase, (insertResult.data as { id: string }).id);
     }
 
     if (!isCompatibilityColumnError(insertResult.error.message)) {
@@ -226,63 +251,48 @@ export async function updateBranch(branchId: string, input: UpdateBranchInput) {
     throw new Error('NIT, nombre, pais, ciudad y barrio/localidad son obligatorios.');
   }
 
-  const updateAttempts: Array<{
-    payload: Record<string, string | boolean | null>;
-    selection: string;
-  }> = [
+  const updateAttempts: Array<Record<string, string | boolean | null>> = [
     {
-      payload: {
-        nit: payload.nit,
-        nombre: payload.nombre,
-        direccion: payload.direccion,
-        ciudad: payload.ciudad,
-        localidad: payload.localidad,
-        pais: payload.pais,
-        telefono: payload.telefono,
-        email: payload.email,
-        estado: payload.estado,
-      },
-      selection: BRANCH_SELECT_WITH_LOCALITY_AND_STATE,
+      nit: payload.nit,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      localidad: payload.localidad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      estado: payload.estado,
     },
     {
-      payload: {
-        nit: payload.nit,
-        nombre: payload.nombre,
-        direccion: payload.direccion,
-        ciudad: payload.ciudad,
-        pais: payload.pais,
-        telefono: payload.telefono,
-        email: payload.email,
-        estado: payload.estado,
-      },
-      selection: BRANCH_SELECT_WITHOUT_LOCALITY_AND_STATE,
+      nit: payload.nit,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      estado: payload.estado,
     },
     {
-      payload: {
-        nit: payload.nit,
-        nombre: payload.nombre,
-        direccion: payload.direccion,
-        ciudad: payload.ciudad,
-        localidad: payload.localidad,
-        pais: payload.pais,
-        telefono: payload.telefono,
-        email: payload.email,
-        activo: payload.estado,
-      },
-      selection: BRANCH_SELECT_WITH_LOCALITY_AND_ACTIVE,
+      nit: payload.nit,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      localidad: payload.localidad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      activo: payload.estado,
     },
     {
-      payload: {
-        nit: payload.nit,
-        nombre: payload.nombre,
-        direccion: payload.direccion,
-        ciudad: payload.ciudad,
-        pais: payload.pais,
-        telefono: payload.telefono,
-        email: payload.email,
-        activo: payload.estado,
-      },
-      selection: BRANCH_SELECT_WITHOUT_LOCALITY_AND_ACTIVE,
+      nit: payload.nit,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      activo: payload.estado,
     },
   ];
   let lastCompatibilityError: string | null = null;
@@ -291,13 +301,13 @@ export async function updateBranch(branchId: string, input: UpdateBranchInput) {
     const updateResult = await supabase
       .schema('operaciones')
       .from('locales')
-      .update(attempt.payload)
+      .update(attempt)
       .eq('id', normalizedId)
-      .select(attempt.selection)
+      .select('id')
       .single();
 
     if (!updateResult.error) {
-      return mapBranch(updateResult.data as unknown as BranchRow);
+      return findBranchById(supabase, normalizedId);
     }
 
     if (!isCompatibilityColumnError(updateResult.error.message)) {
@@ -348,30 +358,7 @@ export async function deleteBranch(branchId: string) {
     throw new Error(`[BRANCHES] ${deleteInventoryError.message}`);
   }
 
-  // Limpia ventas y detalles de venta de la sucursal (si el modulo existe).
-  const { data: salesRows, error: listSalesError } = await supabase
-    .schema('ventas')
-    .from('ventas')
-    .select('id')
-    .eq('local_id', normalizedId);
-
-  if (listSalesError && !isMissingRelationError(listSalesError)) {
-    throw new Error(`[BRANCHES] ${listSalesError.message}`);
-  }
-
-  const saleIds = (salesRows ?? []).map((sale) => sale.id);
-  if (saleIds.length > 0) {
-    const { error: deleteDetailsError } = await supabase
-      .schema('ventas')
-      .from('detalle_venta')
-      .delete()
-      .in('venta_id', saleIds);
-
-    if (deleteDetailsError && !isMissingRelationError(deleteDetailsError)) {
-      throw new Error(`[BRANCHES] ${deleteDetailsError.message}`);
-    }
-  }
-
+  // Limpia ventas relacionadas de la sucursal con modelo integrado (si el modulo existe).
   const { error: deleteSalesError } = await supabase
     .schema('ventas')
     .from('ventas')

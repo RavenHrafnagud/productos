@@ -33,6 +33,14 @@ export function toFriendlySupabaseMessage(
 ) {
   if (!rawError) return null;
 
+  if (/usuario_locales/i.test(rawError)) {
+    return 'Hay una politica o dependencia antigua de usuario_locales. Ejecuta database/011_fix_operaciones_rls_after_usuario_locales.sql en Supabase.';
+  }
+
+  if (/persona_id|usuarios_id/i.test(rawError)) {
+    return 'Hay una diferencia de esquema en movimientos de inventario. Ejecuta database/012_update_movimientos_usuario_id.sql en Supabase.';
+  }
+
   if (isSetupError(rawError)) {
     if (context === 'sucursales') {
       return 'Primero crea una sucursal.';
