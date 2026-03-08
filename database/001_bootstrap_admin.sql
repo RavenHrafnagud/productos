@@ -7,8 +7,8 @@ begin;
 create extension if not exists pgcrypto;
 
 -- 1) Asegura existencia del rol "admin" en la tabla de negocio.
-insert into identidad.roles (nombre, descripcion, activo, created_at)
-values ('admin', 'Administrador principal', true, now())
+insert into identidad.roles (nombre, descripcion, created_at)
+values ('admin', 'Administrador principal', now())
 on conflict (nombre) do nothing;
 
 -- 2) Crea o actualiza usuario en Auth con password hash (nunca texto plano en BD).
@@ -113,7 +113,7 @@ upsert_persona as (
     nombres,
     apellidos,
     email,
-    activo,
+    estado,
     created_at,
     updated_at
   )
@@ -129,7 +129,7 @@ upsert_persona as (
   from password_data p
   on conflict (numero_documento) do update
     set email = excluded.email,
-        activo = true,
+        estado = true,
         updated_at = now()
   returning id
 ),
@@ -142,42 +142,43 @@ resolved_persona as (
     and not exists (select 1 from upsert_persona)
   limit 1
 ),
+resolved_role as (
+  select r.id as rol_id
+  from identidad.roles r
+  where lower(r.nombre) = 'admin'
+  limit 1
+),
 upsert_usuario as (
   insert into identidad.usuarios (
     id,
     persona_id,
+    rol_id,
+    fecha_asignacion,
     ultimo_acceso,
-    activo,
+    estado,
     created_at,
     updated_at
   )
   select
     ra.id,
     rp.id,
+    rr.rol_id,
+    now(),
     null,
     true,
     now(),
     now()
   from resolved_auth ra
   cross join resolved_persona rp
+  cross join resolved_role rr
   on conflict (id) do update
     set persona_id = excluded.persona_id,
-        activo = true,
+        rol_id = coalesce(excluded.rol_id, identidad.usuarios.rol_id),
+        fecha_asignacion = coalesce(identidad.usuarios.fecha_asignacion, excluded.fecha_asignacion),
+        estado = true,
         updated_at = now()
   returning persona_id
 )
-insert into identidad.persona_roles (persona_id, rol_id, fecha_asignacion, activo)
-select
-  rp.id,
-  r.id,
-  now(),
-  true
-from resolved_persona rp
-join identidad.roles r on lower(r.nombre) = 'admin'
-where not exists (
-  select 1
-  from identidad.persona_roles pr
-  where pr.persona_id = rp.id and pr.rol_id = r.id
-);
+select 1 from upsert_usuario;
 
 commit;

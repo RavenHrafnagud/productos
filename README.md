@@ -31,6 +31,7 @@ database/
   010_merge_detalle_venta_into_ventas.sql  # integra detalle_venta en ventas y elimina tablas legacy
   011_fix_operaciones_rls_after_usuario_locales.sql  # repara politicas RLS de operaciones para admins
   012_update_movimientos_usuario_id.sql  # cambia persona_id por usuarios_id en movimientos_inventario
+  013_refactor_identidad_estado_roles.sql  # refactor en identidad (estado/roles/usuarios)
 ```
 
 ## Configuracion local

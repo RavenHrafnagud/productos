@@ -17,24 +17,42 @@ export interface Database {
           nombres: string;
           apellidos: string;
           email: string | null;
+          estado: boolean;
         },
         {
           id?: string;
           nombres: string;
           apellidos: string;
           email?: string | null;
+          estado?: boolean;
+        }
+      >;
+      roles: TableShape<
+        {
+          id: string;
+          nombre: string;
+          descripcion: string | null;
+        },
+        {
+          id?: string;
+          nombre: string;
+          descripcion?: string | null;
         }
       >;
       usuarios: TableShape<
         {
           id: string;
           persona_id: string;
-          activo: boolean;
+          rol_id: string | null;
+          fecha_asignacion: string | null;
+          estado: boolean;
         },
         {
           id: string;
           persona_id: string;
-          activo?: boolean;
+          rol_id?: string | null;
+          fecha_asignacion?: string | null;
+          estado?: boolean;
         }
       >;
     };

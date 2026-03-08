@@ -5,8 +5,8 @@
 begin;
 
 -- 1) Asegura rol admin.
-insert into identidad.roles (nombre, descripcion, activo, created_at)
-values ('admin', 'Administrador principal', true, now())
+insert into identidad.roles (nombre, descripcion, created_at)
+values ('admin', 'Administrador principal', now())
 on conflict (nombre) do nothing;
 
 -- 2) Busca usuario auth por correo y lo vincula a tablas de negocio.
@@ -23,7 +23,7 @@ upsert_persona as (
     nombres,
     apellidos,
     email,
-    activo,
+    estado,
     created_at,
     updated_at
   )
@@ -39,7 +39,7 @@ upsert_persona as (
   )
   on conflict (numero_documento) do update
     set email = excluded.email,
-        activo = true,
+        estado = true,
         updated_at = now()
   returning id
 ),
@@ -48,26 +48,23 @@ resolved_persona as (
   union all
   select p.id from identidad.personas p where p.numero_documento = 'ADMIN-TAROT-001'
   limit 1
+),
+resolved_role as (
+  select r.id as rol_id
+  from identidad.roles r
+  where lower(r.nombre) = 'admin'
+  limit 1
 )
-insert into identidad.usuarios (id, persona_id, activo, created_at, updated_at)
-select a.id, rp.id, true, now(), now()
+insert into identidad.usuarios (id, persona_id, rol_id, fecha_asignacion, estado, created_at, updated_at)
+select a.id, rp.id, rr.rol_id, now(), true, now(), now()
 from auth_admin a
 cross join resolved_persona rp
+cross join resolved_role rr
 on conflict (id) do update
   set persona_id = excluded.persona_id,
-      activo = true,
+      rol_id = coalesce(excluded.rol_id, identidad.usuarios.rol_id),
+      fecha_asignacion = coalesce(identidad.usuarios.fecha_asignacion, excluded.fecha_asignacion),
+      estado = true,
       updated_at = now();
-
--- 3) Asigna rol admin a la persona.
-insert into identidad.persona_roles (persona_id, rol_id, fecha_asignacion, activo)
-select p.id, r.id, now(), true
-from identidad.personas p
-join identidad.roles r on lower(r.nombre) = 'admin'
-where p.numero_documento = 'ADMIN-TAROT-001'
-and not exists (
-  select 1
-  from identidad.persona_roles pr
-  where pr.persona_id = p.id and pr.rol_id = r.id
-);
 
 commit;

@@ -15,14 +15,10 @@ as $$
   select exists (
     select 1
     from identidad.usuarios u
-    join identidad.persona_roles pr
-      on pr.persona_id = u.persona_id
-     and pr.activo = true
     join identidad.roles r
-      on r.id = pr.rol_id
-     and r.activo = true
+      on r.id = u.rol_id
     where u.id = p_uid
-      and u.activo = true
+      and coalesce(u.estado, true) = true
       and lower(r.nombre) = 'admin'
   );
 $$;
