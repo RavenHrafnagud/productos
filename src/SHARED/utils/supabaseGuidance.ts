@@ -48,7 +48,13 @@ export function toFriendlySupabaseMessage(
 
   if (isPermissionError(rawError)) {
     if (context === 'sucursales') {
-      return 'No tienes permisos para crear sucursales. Ejecuta el script database/005_fix_admin_branch_permissions.sql en Supabase.';
+      return 'No tienes permisos para gestionar sucursales. Ejecuta database/005_fix_admin_branch_permissions.sql y database/007_secure_delete_helpers.sql en Supabase.';
+    }
+    if (context === 'productos') {
+      return 'No tienes permisos para gestionar productos. Ejecuta database/007_secure_delete_helpers.sql o revisa politicas RLS.';
+    }
+    if (context === 'inventario') {
+      return 'No tienes permisos para gestionar inventario. Verifica politicas RLS del esquema operaciones.';
     }
     return 'No tienes permisos para esta operacion. Verifica politicas RLS y rol del usuario.';
   }

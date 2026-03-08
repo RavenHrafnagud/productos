@@ -11,6 +11,7 @@ import { toPositiveNumber } from '../../SHARED/utils/validators';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
 import {
   ButtonsRow,
+  DangerButton,
   Divider,
   Field,
   FormGrid,
@@ -44,14 +45,27 @@ const EMPTY_FORM: InventoryForm = {
 
 export function InventorySection({ branchId, branches, onBranchChange, refreshKey }: InventorySectionProps) {
   const { products } = useProducts(refreshKey);
-  const { inventory, status, error, saveStatus, saveError, saveRow, reload } = useInventory(
+  const {
+    inventory,
+    status,
+    error,
+    saveStatus,
+    saveError,
+    deleteStatus,
+    deleteError,
+    saveRow,
+    removeRow,
+    reload,
+  } = useInventory(
     branchId,
     refreshKey,
   );
   const [form, setForm] = useState<InventoryForm>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
+  const [deletingInventoryId, setDeletingInventoryId] = useState<string | null>(null);
   const friendlyLoadError = toFriendlySupabaseMessage(error, 'inventario');
   const friendlySaveError = toFriendlySupabaseMessage(saveError, 'inventario');
+  const friendlyDeleteError = toFriendlySupabaseMessage(deleteError, 'inventario');
 
   const productOptions = useMemo(
     () => products.filter((product) => product.activo).map((product) => ({ id: product.id, name: product.nombre })),
@@ -60,7 +74,7 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
   const branchOptions = useMemo(
     () =>
       branches
-        .filter((branch) => branch.activo)
+        .filter((branch) => branch.estado)
         .map((branch) => ({ id: branch.id, name: branch.nombre })),
     [branches],
   );
@@ -100,6 +114,29 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
       setForm(EMPTY_FORM);
     } catch {
       // El error principal se comunica con saveError.
+    }
+  };
+
+  const handleDeleteInventory = async (input: {
+    inventarioId: string;
+    productoId: string;
+    sucursalId: string;
+    productoNombre: string;
+  }) => {
+    const confirmation = window.confirm(
+      `Vas a eliminar el inventario de "${input.productoNombre}" para esta sucursal. Esta accion no se puede deshacer. Deseas continuar?`,
+    );
+    if (!confirmation) return;
+
+    setDeletingInventoryId(input.inventarioId);
+    try {
+      await removeRow({
+        inventarioId: input.inventarioId,
+        productoId: input.productoId,
+        sucursalId: input.sucursalId,
+      });
+    } finally {
+      setDeletingInventoryId(null);
     }
   };
 
@@ -171,6 +208,12 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
           />
         )}
         {saveStatus === 'success' && <StatusState kind="info" message="Inventario actualizado." />}
+        {(friendlyDeleteError || deleteStatus === 'success') && (
+          <StatusState
+            kind={friendlyDeleteError ? 'error' : 'info'}
+            message={friendlyDeleteError ?? 'Inventario eliminado correctamente.'}
+          />
+        )}
 
         <ButtonsRow>
           <PrimaryButton type="submit" disabled={saveStatus === 'submitting'}>
@@ -210,6 +253,7 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
                 <th>Minimo</th>
                 <th>Estado</th>
                 <th>Actualizado</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -225,6 +269,24 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
                       <Tag $tone={lowStock ? 'warn' : 'ok'}>{lowStock ? 'Bajo' : 'Estable'}</Tag>
                     </td>
                     <td>{formatDateTime(item.updatedAt)}</td>
+                    <td>
+                      <DangerButton
+                        type="button"
+                        onClick={() =>
+                          handleDeleteInventory({
+                            inventarioId: item.id,
+                            productoId: item.productoId,
+                            sucursalId: item.sucursalId,
+                            productoNombre: item.productoNombre,
+                          })
+                        }
+                        disabled={deleteStatus === 'submitting'}
+                      >
+                        {deleteStatus === 'submitting' && deletingInventoryId === item.id
+                          ? 'Eliminando...'
+                          : 'Eliminar'}
+                      </DangerButton>
+                    </td>
                   </tr>
                 );
               })}

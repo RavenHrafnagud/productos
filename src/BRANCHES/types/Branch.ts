@@ -11,7 +11,7 @@ export interface Branch {
   pais: string;
   telefono: string | null;
   email: string | null;
-  activo: boolean;
+  estado: boolean;
   createdAt: string;
 }
 
@@ -27,4 +27,10 @@ export interface CreateBranchInput {
   pais: string;
   telefono: string;
   email: string;
+  estado: boolean;
 }
+
+/**
+ * Payload de actualizacion de sucursal.
+ */
+export interface UpdateBranchInput extends CreateBranchInput {}

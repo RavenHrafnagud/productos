@@ -104,3 +104,42 @@ export async function saveInventory(input: SaveInventoryInput) {
     if (movementError) throw new Error(`[INVENTORY] ${movementError.message}`);
   }
 }
+
+export async function deleteInventoryRow(input: {
+  inventarioId: string;
+  productoId: string;
+  sucursalId: string;
+}) {
+  const supabase = getSupabaseClient();
+  const inventarioId = input.inventarioId.trim();
+  const productoId = input.productoId.trim();
+  const sucursalId = input.sucursalId.trim();
+
+  if (!inventarioId || !productoId || !sucursalId) {
+    throw new Error('No se recibieron datos completos para eliminar inventario.');
+  }
+
+  // Limpia historial de movimientos del mismo producto/sucursal para evitar bloqueos de FK al borrar sucursal.
+  const { error: movementsError } = await supabase
+    .schema('operaciones')
+    .from('movimientos_inventario')
+    .delete()
+    .eq('producto_id', productoId)
+    .eq('local_id', sucursalId);
+
+  if (movementsError) throw new Error(`[INVENTORY] ${movementsError.message}`);
+
+  const { error: inventoryError } = await supabase
+    .schema('operaciones')
+    .from('inventario')
+    .delete()
+    .eq('id', inventarioId);
+
+  if (!inventoryError) return;
+
+  if (inventoryError.code === '23503') {
+    throw new Error('No puedes eliminar este inventario porque tiene registros relacionados.');
+  }
+
+  throw new Error(`[INVENTORY] ${inventoryError.message}`);
+}

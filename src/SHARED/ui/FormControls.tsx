@@ -108,6 +108,20 @@ export const GhostButton = styled.button`
   }
 `;
 
+export const DangerButton = styled.button`
+  border: 1px solid #e2b4b4;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  cursor: pointer;
+  color: #8e2b2b;
+  background: #fff4f4;
+
+  :disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
+
 export const Divider = styled.hr`
   margin: 14px 0;
   border: 0;

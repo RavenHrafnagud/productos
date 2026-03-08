@@ -3,7 +3,7 @@
  * Administra lectura y registro de stock desde la interfaz.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { listInventoryByBranch, saveInventory } from '../api/inventoryRepository';
+import { deleteInventoryRow, listInventoryByBranch, saveInventory } from '../api/inventoryRepository';
 import type { InventoryItem, SaveInventoryInput } from '../types/InventoryItem';
 
 interface UseInventoryResult {
@@ -12,8 +12,11 @@ interface UseInventoryResult {
   error: string | null;
   saveStatus: 'idle' | 'submitting' | 'success' | 'error';
   saveError: string | null;
+  deleteStatus: 'idle' | 'submitting' | 'success' | 'error';
+  deleteError: string | null;
   reload: () => Promise<void>;
   saveRow: (input: SaveInventoryInput) => Promise<void>;
+  removeRow: (input: { inventarioId: string; productoId: string; sucursalId: string }) => Promise<void>;
 }
 
 export function useInventory(branchId: string, refreshKey: number): UseInventoryResult {
@@ -22,6 +25,8 @@ export function useInventory(branchId: string, refreshKey: number): UseInventory
   const [error, setError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<UseInventoryResult['saveStatus']>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [deleteStatus, setDeleteStatus] = useState<UseInventoryResult['deleteStatus']>('idle');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (!branchId.trim()) {
@@ -60,9 +65,37 @@ export function useInventory(branchId: string, refreshKey: number): UseInventory
     [reload],
   );
 
+  const removeRow = useCallback(
+    async (input: { inventarioId: string; productoId: string; sucursalId: string }) => {
+      setDeleteStatus('submitting');
+      setDeleteError(null);
+      try {
+        await deleteInventoryRow(input);
+        setDeleteStatus('success');
+        await reload();
+      } catch (err) {
+        setDeleteStatus('error');
+        setDeleteError(err instanceof Error ? err.message : 'No se pudo eliminar el registro de inventario.');
+        throw err;
+      }
+    },
+    [reload],
+  );
+
   useEffect(() => {
     reload().catch(() => undefined);
   }, [reload, refreshKey]);
 
-  return { inventory, status, error, saveStatus, saveError, reload, saveRow };
+  return {
+    inventory,
+    status,
+    error,
+    saveStatus,
+    saveError,
+    deleteStatus,
+    deleteError,
+    reload,
+    saveRow,
+    removeRow,
+  };
 }

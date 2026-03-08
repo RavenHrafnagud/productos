@@ -37,12 +37,12 @@ export const Tag = styled.span<{ $tone?: 'ok' | 'off' | 'warn' }>`
   text-transform: uppercase;
   letter-spacing: 0.45px;
   background: ${({ $tone }) => {
-    if ($tone === 'off') return '#f6dddd';
+    if ($tone === 'off') return '#eceff3';
     if ($tone === 'warn') return '#ffedd8';
     return '#def4ea';
   }};
   color: ${({ $tone }) => {
-    if ($tone === 'off') return '#8e2b2b';
+    if ($tone === 'off') return '#555f6d';
     if ($tone === 'warn') return '#7a4a1f';
     return '#1d6046';
   }};

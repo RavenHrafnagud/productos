@@ -78,7 +78,7 @@ export interface Database {
           pais: string;
           telefono: string | null;
           email: string | null;
-          activo: boolean;
+          estado: boolean;
           created_at: string;
         },
         {
@@ -91,7 +91,7 @@ export interface Database {
           pais?: string;
           telefono?: string | null;
           email?: string | null;
-          activo?: boolean;
+          estado?: boolean;
         }
       >;
       inventario: TableShape<

@@ -10,6 +10,7 @@ import { sanitizeText, toPositiveNumber } from '../../SHARED/utils/validators';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
 import {
   ButtonsRow,
+  DangerButton,
   Divider,
   Field,
   Fields,
@@ -44,11 +45,24 @@ const EMPTY_FORM: ProductForm = {
 };
 
 export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectionProps) {
-  const { products, status, error, createStatus, createError, addProduct, reload } = useProducts(refreshKey);
+  const {
+    products,
+    status,
+    error,
+    createStatus,
+    createError,
+    deleteStatus,
+    deleteError,
+    addProduct,
+    removeProduct,
+    reload,
+  } = useProducts(refreshKey);
   const [form, setForm] = useState<ProductForm>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const friendlyLoadError = toFriendlySupabaseMessage(error, 'productos');
   const friendlyCreateError = toFriendlySupabaseMessage(createError, 'productos');
+  const friendlyDeleteError = toFriendlySupabaseMessage(deleteError, 'productos');
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -85,6 +99,21 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
       onProductCreated?.();
     } catch {
       // El detalle de error se refleja en createError.
+    }
+  };
+
+  const handleDeleteProduct = async (productId: string, productName: string) => {
+    const confirmation = window.confirm(
+      `Vas a eliminar el producto "${productName}". Esta accion no se puede deshacer. Deseas continuar?`,
+    );
+    if (!confirmation) return;
+
+    setDeletingProductId(productId);
+    try {
+      await removeProduct(productId);
+      onProductCreated?.();
+    } finally {
+      setDeletingProductId(null);
     }
   };
 
@@ -152,6 +181,12 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
           />
         )}
         {createStatus === 'success' && <StatusState kind="info" message="Producto creado correctamente." />}
+        {(friendlyDeleteError || deleteStatus === 'success') && (
+          <StatusState
+            kind={friendlyDeleteError ? 'error' : 'info'}
+            message={friendlyDeleteError ?? 'Producto eliminado correctamente.'}
+          />
+        )}
 
         <ButtonsRow>
           <PrimaryButton type="submit" disabled={createStatus === 'submitting'}>
@@ -190,6 +225,7 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
                 <th>Venta</th>
                 <th>Estado</th>
                 <th>Actualizado</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -205,6 +241,17 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
                     </Tag>
                   </td>
                   <td>{formatDateTime(product.updatedAt)}</td>
+                  <td>
+                    <DangerButton
+                      type="button"
+                      onClick={() => handleDeleteProduct(product.id, product.nombre)}
+                      disabled={deleteStatus === 'submitting'}
+                    >
+                      {deleteStatus === 'submitting' && deletingProductId === product.id
+                        ? 'Eliminando...'
+                        : 'Eliminar'}
+                    </DangerButton>
+                  </td>
                 </tr>
               ))}
             </tbody>

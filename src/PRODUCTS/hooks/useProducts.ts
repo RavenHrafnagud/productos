@@ -3,7 +3,7 @@
  * Permite poblar catalogo desde una base inicialmente vacia.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { createProduct, listProducts } from '../api/productRepository';
+import { createProduct, deleteProduct, listProducts } from '../api/productRepository';
 import type { CreateProductInput, Product } from '../types/Product';
 
 interface UseProductsResult {
@@ -12,8 +12,11 @@ interface UseProductsResult {
   error: string | null;
   createStatus: 'idle' | 'submitting' | 'success' | 'error';
   createError: string | null;
+  deleteStatus: 'idle' | 'submitting' | 'success' | 'error';
+  deleteError: string | null;
   reload: () => Promise<void>;
   addProduct: (input: CreateProductInput) => Promise<void>;
+  removeProduct: (productId: string) => Promise<void>;
 }
 
 export function useProducts(refreshKey: number): UseProductsResult {
@@ -22,6 +25,8 @@ export function useProducts(refreshKey: number): UseProductsResult {
   const [error, setError] = useState<string | null>(null);
   const [createStatus, setCreateStatus] = useState<UseProductsResult['createStatus']>('idle');
   const [createError, setCreateError] = useState<string | null>(null);
+  const [deleteStatus, setDeleteStatus] = useState<UseProductsResult['deleteStatus']>('idle');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setStatus('loading');
@@ -50,9 +55,34 @@ export function useProducts(refreshKey: number): UseProductsResult {
     }
   }, []);
 
+  const removeProduct = useCallback(async (productId: string) => {
+    setDeleteStatus('submitting');
+    setDeleteError(null);
+    try {
+      await deleteProduct(productId);
+      setProducts((prev) => prev.filter((product) => product.id !== productId));
+      setDeleteStatus('success');
+    } catch (err) {
+      setDeleteStatus('error');
+      setDeleteError(err instanceof Error ? err.message : 'No se pudo eliminar el producto.');
+      throw err;
+    }
+  }, []);
+
   useEffect(() => {
     reload().catch(() => undefined);
   }, [reload, refreshKey]);
 
-  return { products, status, error, createStatus, createError, reload, addProduct };
+  return {
+    products,
+    status,
+    error,
+    createStatus,
+    createError,
+    deleteStatus,
+    deleteError,
+    reload,
+    addProduct,
+    removeProduct,
+  };
 }

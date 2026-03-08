@@ -10,6 +10,7 @@ import { isValidEmail, sanitizeText } from '../../SHARED/utils/validators';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
 import {
   ButtonsRow,
+  DangerButton,
   Divider,
   Field,
   Fields,
@@ -21,7 +22,7 @@ import {
 } from '../../SHARED/ui/FormControls';
 import { SectionCard, SectionHeader, SectionMeta, SectionTitle } from '../../SHARED/ui/SectionCard';
 import { StatusState } from '../../SHARED/ui/StatusState';
-import type { Branch, CreateBranchInput } from '../types/Branch';
+import type { Branch, CreateBranchInput, UpdateBranchInput } from '../types/Branch';
 
 interface BranchesSectionProps {
   branches: Branch[];
@@ -29,7 +30,13 @@ interface BranchesSectionProps {
   error: string | null;
   createStatus: 'idle' | 'submitting' | 'success' | 'error';
   createError: string | null;
+  updateStatus: 'idle' | 'submitting' | 'success' | 'error';
+  updateError: string | null;
+  deleteStatus: 'idle' | 'submitting' | 'success' | 'error';
+  deleteError: string | null;
   onCreateBranch: (input: CreateBranchInput) => Promise<void>;
+  onUpdateBranch: (branchId: string, input: UpdateBranchInput) => Promise<void>;
+  onDeleteBranch: (branchId: string) => Promise<void>;
   onReload: () => Promise<void>;
 }
 
@@ -42,6 +49,7 @@ const EMPTY_FORM: CreateBranchInput = {
   pais: 'CO',
   telefono: '',
   email: '',
+  estado: true,
 };
 
 export function BranchesSection({
@@ -50,13 +58,24 @@ export function BranchesSection({
   error,
   createStatus,
   createError,
+  updateStatus,
+  updateError,
+  deleteStatus,
+  deleteError,
   onCreateBranch,
+  onUpdateBranch,
+  onDeleteBranch,
   onReload,
 }: BranchesSectionProps) {
   const [form, setForm] = useState<CreateBranchInput>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
+  const [editingBranchId, setEditingBranchId] = useState<string | null>(null);
+  const [deletingBranchId, setDeletingBranchId] = useState<string | null>(null);
   const friendlyLoadError = toFriendlySupabaseMessage(error, 'sucursales');
   const friendlyCreateError = toFriendlySupabaseMessage(createError, 'sucursales');
+  const friendlyUpdateError = toFriendlySupabaseMessage(updateError, 'sucursales');
+  const friendlyDeleteError = toFriendlySupabaseMessage(deleteError, 'sucursales');
+  const isSubmitting = createStatus === 'submitting' || updateStatus === 'submitting';
 
   // Catalogos dependientes para experiencia guiada en ubicaciones.
   const countryOptions = useMemo(() => getCountryOptions(), []);
@@ -79,6 +98,7 @@ export function BranchesSection({
       pais: sanitizeText(form.pais, 80) || 'CO',
       telefono: sanitizeText(form.telefono, 25),
       email: form.email.trim().toLowerCase(),
+      estado: form.estado,
     };
 
     if (!payload.nit || !payload.nombre) {
@@ -95,10 +115,54 @@ export function BranchesSection({
     }
 
     try {
-      await onCreateBranch(payload);
+      if (editingBranchId) {
+        await onUpdateBranch(editingBranchId, payload);
+        setEditingBranchId(null);
+      } else {
+        await onCreateBranch(payload);
+      }
       setForm(EMPTY_FORM);
     } catch {
-      // El detalle se muestra en createError.
+      // El detalle se muestra en createError/updateError.
+    }
+  };
+
+  const handleStartEditBranch = (branch: Branch) => {
+    setFormError(null);
+    setEditingBranchId(branch.id);
+    setForm({
+      nit: branch.nit,
+      nombre: branch.nombre,
+      direccion: branch.direccion ?? '',
+      ciudad: branch.ciudad ?? '',
+      localidad: branch.localidad ?? '',
+      pais: branch.pais,
+      telefono: branch.telefono ?? '',
+      email: branch.email ?? '',
+      estado: branch.estado,
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingBranchId(null);
+    setFormError(null);
+    setForm(EMPTY_FORM);
+  };
+
+  const handleDeleteBranch = async (branch: Branch) => {
+    const confirmation = window.confirm(
+      `Vas a eliminar la sucursal "${branch.nombre}". Esta accion no se puede deshacer. Deseas continuar?`,
+    );
+    if (!confirmation) return;
+
+    setDeletingBranchId(branch.id);
+    try {
+      await onDeleteBranch(branch.id);
+      if (editingBranchId === branch.id) {
+        handleCancelEdit();
+      }
+    } finally {
+      setDeletingBranchId(null);
     }
   };
 
@@ -211,6 +275,22 @@ export function BranchesSection({
               placeholder="Cra 10 # 20-30"
             />
           </Field>
+          <Field>
+            Estado
+            <SelectControl
+              value={form.estado ? 'ACTIVO' : 'INACTIVO'}
+              style={{ color: form.estado ? '#1d6046' : '#5d636a' }}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  estado: event.target.value === 'ACTIVO',
+                }))
+              }
+            >
+              <option value="ACTIVO">Activo</option>
+              <option value="INACTIVO">Inactivo</option>
+            </SelectControl>
+          </Field>
         </Fields>
 
         {(formError || friendlyCreateError) && (
@@ -219,12 +299,30 @@ export function BranchesSection({
             message={formError ?? friendlyCreateError ?? 'Error inesperado.'}
           />
         )}
+        {friendlyUpdateError && (
+          <StatusState
+            kind={isSetupError(updateError) ? 'info' : 'error'}
+            message={friendlyUpdateError}
+          />
+        )}
         {createStatus === 'success' && <StatusState kind="info" message="Sucursal creada correctamente." />}
+        {updateStatus === 'success' && <StatusState kind="info" message="Sucursal actualizada correctamente." />}
+        {(friendlyDeleteError || deleteStatus === 'success') && (
+          <StatusState
+            kind={friendlyDeleteError ? 'error' : 'info'}
+            message={friendlyDeleteError ?? 'Sucursal eliminada correctamente.'}
+          />
+        )}
 
         <ButtonsRow>
-          <PrimaryButton type="submit" disabled={createStatus === 'submitting'}>
-            {createStatus === 'submitting' ? 'Guardando...' : 'Registrar sucursal'}
+          <PrimaryButton type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Guardando...' : editingBranchId ? 'Guardar cambios' : 'Registrar sucursal'}
           </PrimaryButton>
+          {editingBranchId && (
+            <GhostButton type="button" onClick={handleCancelEdit}>
+              Cancelar edicion
+            </GhostButton>
+          )}
           <GhostButton type="button" onClick={() => onReload()}>
             Actualizar listado
           </GhostButton>
@@ -249,27 +347,56 @@ export function BranchesSection({
           <DataTable>
             <thead>
               <tr>
+                <th>NIT</th>
                 <th>Sucursal</th>
+                <th>Pais</th>
                 <th>Ciudad</th>
                 <th>Barrio/Localidad</th>
-                <th>Contacto</th>
+                <th>Direccion</th>
+                <th>Telefono</th>
+                <th>Email</th>
                 <th>Estado</th>
                 <th>Creada</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {branches.map((branch) => (
                 <tr key={branch.id}>
+                  <td>{branch.nit}</td>
                   <td>{branch.nombre}</td>
+                  <td>{branch.pais}</td>
                   <td>{branch.ciudad ?? 'Sin ciudad'}</td>
                   <td>{branch.localidad ?? 'Sin localidad'}</td>
-                  <td>{branch.telefono ?? branch.email ?? 'Sin contacto'}</td>
+                  <td>{branch.direccion ?? 'Sin direccion'}</td>
+                  <td>{branch.telefono ?? 'Sin telefono'}</td>
+                  <td>{branch.email ?? 'Sin email'}</td>
                   <td>
-                    <Tag $tone={branch.activo ? 'ok' : 'off'}>
-                      {branch.activo ? 'Activa' : 'Inactiva'}
+                    <Tag $tone={branch.estado ? 'ok' : 'off'}>
+                      {branch.estado ? 'Activa' : 'Inactiva'}
                     </Tag>
                   </td>
                   <td>{formatDateTime(branch.createdAt)}</td>
+                  <td>
+                    <ButtonsRow>
+                      <GhostButton
+                        type="button"
+                        onClick={() => handleStartEditBranch(branch)}
+                        disabled={deleteStatus === 'submitting'}
+                      >
+                        Editar
+                      </GhostButton>
+                      <DangerButton
+                        type="button"
+                        onClick={() => handleDeleteBranch(branch)}
+                        disabled={deleteStatus === 'submitting'}
+                      >
+                        {deleteStatus === 'submitting' && deletingBranchId === branch.id
+                          ? 'Eliminando...'
+                          : 'Eliminar'}
+                      </DangerButton>
+                    </ButtonsRow>
+                  </td>
                 </tr>
               ))}
             </tbody>
