@@ -5,6 +5,24 @@
 import type { Session } from '@supabase/supabase-js';
 import { getSupabaseClient } from '../../SHARED/lib/supabase/client';
 
+export interface IdentitySessionAudit {
+  auth_user_id: string;
+  email: string | null;
+  persona_id: string | null;
+  rol_id: number | null;
+  rol_nombre: string | null;
+  linked: boolean;
+  diagnostic: string;
+}
+
+export async function syncIdentitySessionLink(): Promise<IdentitySessionAudit | null> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await (supabase as any).rpc('sync_identity_session_link');
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as IdentitySessionAudit[];
+  return rows[0] ?? null;
+}
+
 export async function signInWithEmail(email: string, password: string) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -13,6 +31,9 @@ export async function signInWithEmail(email: string, password: string) {
   });
 
   if (error) throw new Error(error.message);
+  if (data.session) {
+    await syncIdentitySessionLink();
+  }
   return data.session;
 }
 

@@ -95,3 +95,64 @@ export const Grid = styled.section`
     grid-template-columns: 1fr;
   }
 `;
+
+export const ShellLayout = styled.section`
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 16px;
+  align-items: start;
+
+  @media (max-width: 980px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+export const SideMenu = styled.aside`
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-soft);
+  padding: 12px;
+  position: sticky;
+  top: 14px;
+`;
+
+export const SideMenuTitle = styled.p`
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+`;
+
+export const SideMenuList = styled.div`
+  display: grid;
+  gap: 6px;
+`;
+
+export const SideMenuButton = styled.button<{ $active?: boolean }>`
+  width: 100%;
+  text-align: left;
+  border-radius: 10px;
+  border: 1px solid ${({ $active }) => ($active ? '#7bc2a1' : 'var(--border-soft)')};
+  background: ${({ $active }) => ($active ? 'linear-gradient(125deg, #e7f7ef 0%, #d8f2e4 100%)' : '#fff')};
+  color: ${({ $active }) => ($active ? '#154432' : 'var(--text-main)')};
+  padding: 10px;
+  cursor: pointer;
+
+  strong {
+    display: block;
+    font-size: 0.94rem;
+    margin-bottom: 2px;
+  }
+
+  small {
+    color: ${({ $active }) => ($active ? '#295c49' : 'var(--text-muted)')};
+  }
+`;
+
+export const MainContent = styled.section`
+  min-width: 0;
+`;
