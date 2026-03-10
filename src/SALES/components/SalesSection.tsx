@@ -3,8 +3,10 @@
  * Permite registrar, editar, anular y consultar historial de ventas.
  */
 import { FormEvent, useMemo, useState } from 'react';
+import styled from 'styled-components';
 import type { Branch } from '../../BRANCHES/types/Branch';
 import { useProducts } from '../../PRODUCTS/hooks/useProducts';
+import { getWorldCurrencyOptions } from '../../SHARED/constants/currencies';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
 import {
   ButtonsRow,
@@ -38,13 +40,54 @@ interface SaleForm {
   cantidad: string;
   precioUnitario: string;
   impuestos: string;
-  descuento: string;
+  descuentoPorcentaje: string;
   estado: 'BORRADOR' | 'CONFIRMADA' | 'ANULADA';
   moneda: string;
   numeroComprobante: string;
   observaciones: string;
   fecha: string;
 }
+
+const TotalsPanel = styled.section`
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: linear-gradient(140deg, #fcfffe 0%, #f0fbf5 100%);
+  padding: 12px;
+`;
+
+const TotalsGrid = styled.div`
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+
+  @media (max-width: 980px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const TotalCard = styled.article<{ $featured?: boolean }>`
+  border: 1px solid ${({ $featured }) => ($featured ? '#79bda0' : 'var(--border-soft)')};
+  border-radius: var(--radius-sm);
+  background: ${({ $featured }) => ($featured ? 'linear-gradient(130deg, #e5f8ee 0%, #d4f1e2 100%)' : '#fff')};
+  padding: 10px;
+
+  p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+  }
+
+  strong {
+    margin-top: 4px;
+    display: block;
+    font-size: 1rem;
+    color: ${({ $featured }) => ($featured ? '#10563c' : 'var(--text-main)')};
+  }
+`;
 
 function toDatetimeLocal(date: Date | string) {
   const value = typeof date === 'string' ? new Date(date) : date;
@@ -56,13 +99,18 @@ function toDatetimeLocal(date: Date | string) {
   return `${y}-${m}-${d}T${hh}:${mm}`;
 }
 
+function resolveDiscountPercentage(subtotal: number, descuento: number) {
+  if (subtotal <= 0) return 0;
+  return (descuento / subtotal) * 100;
+}
+
 const EMPTY_FORM: SaleForm = {
   localId: '',
   productoId: '',
   cantidad: '',
   precioUnitario: '',
   impuestos: '0',
-  descuento: '0',
+  descuentoPorcentaje: '0',
   estado: 'CONFIRMADA',
   moneda: 'COP',
   numeroComprobante: '',
@@ -99,6 +147,7 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
   const friendlyAnnulError = toFriendlySupabaseMessage(annulError, 'ventas');
   const isSubmitting = createStatus === 'submitting' || updateStatus === 'submitting';
 
+  const currencyOptions = useMemo(() => getWorldCurrencyOptions('es'), []);
   const branchOptions = useMemo(
     () => branches.filter((branch) => branch.estado).map((branch) => ({ id: branch.id, name: branch.nombre })),
     [branches],
@@ -107,28 +156,51 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
     () => products.filter((product) => product.estado).map((product) => ({ id: product.id, name: product.nombre })),
     [products],
   );
+  const productById = useMemo(
+    () => new Map(products.map((product) => [product.id, product])),
+    [products],
+  );
+
+  const saleCalculation = useMemo(() => {
+    const cantidad = toPositiveNumber(form.cantidad) ?? 0;
+    const precioUnitario = toPositiveNumber(form.precioUnitario) ?? 0;
+    const impuestos = toPositiveNumber(form.impuestos) ?? 0;
+    const descuentoPorcentaje = toPositiveNumber(form.descuentoPorcentaje) ?? 0;
+    const safeDescuentoPorcentaje = Math.min(Math.max(descuentoPorcentaje, 0), 100);
+    const subtotal = cantidad * precioUnitario;
+    const descuentoValor = subtotal * (safeDescuentoPorcentaje / 100);
+    const total = subtotal + impuestos - descuentoValor;
+    return {
+      cantidad,
+      precioUnitario,
+      impuestos,
+      descuentoPorcentaje: safeDescuentoPorcentaje,
+      subtotal,
+      descuentoValor,
+      total,
+    };
+  }, [form.cantidad, form.descuentoPorcentaje, form.impuestos, form.precioUnitario]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
 
-    const cantidad = toPositiveNumber(form.cantidad);
-    const precioUnitario = toPositiveNumber(form.precioUnitario);
-    const impuestos = toPositiveNumber(form.impuestos);
-    const descuento = toPositiveNumber(form.descuento);
+    const { cantidad, precioUnitario, impuestos, descuentoPorcentaje, subtotal, descuentoValor } = saleCalculation;
 
     if (!form.localId || !form.productoId) {
       setFormError('Debes seleccionar sucursal y producto.');
       return;
     }
-    if (cantidad === null || precioUnitario === null || impuestos === null || descuento === null || cantidad <= 0) {
-      setFormError('Cantidad y precio deben ser numericos. La cantidad debe ser mayor a cero.');
+    if (cantidad <= 0 || precioUnitario < 0 || impuestos < 0) {
+      setFormError('Cantidad, precio e impuestos deben ser numericos y validos.');
       return;
     }
-
-    const subtotal = cantidad * precioUnitario;
-    if (descuento > subtotal + impuestos) {
-      setFormError('El descuento no puede ser mayor al total bruto de la venta.');
+    if (descuentoPorcentaje < 0 || descuentoPorcentaje > 100) {
+      setFormError('El descuento debe estar entre 0% y 100%.');
+      return;
+    }
+    if (descuentoValor > subtotal + impuestos) {
+      setFormError('El descuento calculado no puede superar el total bruto de la venta.');
       return;
     }
 
@@ -138,7 +210,7 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
       cantidad,
       precioUnitario,
       impuestos,
-      descuento,
+      descuento: descuentoValor,
       estado: form.estado,
       moneda: sanitizeText(form.moneda, 3).toUpperCase() || 'COP',
       numeroComprobante: sanitizeText(form.numeroComprobante, 80),
@@ -153,7 +225,12 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
       } else {
         await addSale(payload);
       }
-      setForm({ ...EMPTY_FORM, localId: form.localId, fecha: toDatetimeLocal(new Date()) });
+      setForm((prev) => ({
+        ...EMPTY_FORM,
+        localId: prev.localId,
+        moneda: prev.moneda,
+        fecha: toDatetimeLocal(new Date()),
+      }));
       onSaleCreated?.();
     } catch {
       // El error detallado se comunica en updateError/createError.
@@ -169,7 +246,7 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
       cantidad: String(sale.cantidad),
       precioUnitario: String(sale.precioUnitario),
       impuestos: String(sale.impuestos),
-      descuento: String(sale.descuento),
+      descuentoPorcentaje: resolveDiscountPercentage(sale.subtotal, sale.descuento).toFixed(2),
       estado: sale.estado as SaleForm['estado'],
       moneda: sale.moneda,
       numeroComprobante: sale.numeroComprobante ?? '',
@@ -181,7 +258,7 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
   const handleCancelEdit = () => {
     setEditingSaleId(null);
     setFormError(null);
-    setForm(EMPTY_FORM);
+    setForm((prev) => ({ ...EMPTY_FORM, localId: prev.localId, moneda: prev.moneda }));
   };
 
   const handleAnnulSale = async (sale: SaleRecord) => {
@@ -251,7 +328,15 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
             Producto
             <SelectControl
               value={form.productoId}
-              onChange={(event) => setForm((prev) => ({ ...prev, productoId: event.target.value }))}
+              onChange={(event) => {
+                const nextProductId = event.target.value;
+                const product = productById.get(nextProductId);
+                setForm((prev) => ({
+                  ...prev,
+                  productoId: nextProductId,
+                  precioUnitario: product ? String(product.precioVenta) : prev.precioUnitario,
+                }));
+              }}
               required
             >
               <option value="">Selecciona un producto</option>
@@ -284,8 +369,9 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
               required
             />
           </Field>
+
           <Field>
-            Impuestos
+            Impuestos (valor)
             <InputControl
               inputMode="decimal"
               value={form.impuestos}
@@ -294,16 +380,18 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
               required
             />
           </Field>
+
           <Field>
-            Descuento
+            Descuento (%)
             <InputControl
               inputMode="decimal"
-              value={form.descuento}
-              onChange={(event) => setForm((prev) => ({ ...prev, descuento: event.target.value }))}
+              value={form.descuentoPorcentaje}
+              onChange={(event) => setForm((prev) => ({ ...prev, descuentoPorcentaje: event.target.value }))}
               placeholder="0"
               required
             />
           </Field>
+
           <Field>
             Estado
             <SelectControl
@@ -320,16 +408,43 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
               <option value="ANULADA">ANULADA</option>
             </SelectControl>
           </Field>
+
           <Field>
             Moneda
-            <InputControl
+            <SelectControl
               value={form.moneda}
-              onChange={(event) => setForm((prev) => ({ ...prev, moneda: event.target.value.toUpperCase() }))}
-              placeholder="COP"
+              onChange={(event) => setForm((prev) => ({ ...prev, moneda: event.target.value }))}
               required
-            />
+            >
+              {currencyOptions.map((currency) => (
+                <option key={currency.code} value={currency.code}>
+                  {currency.label}
+                </option>
+              ))}
+            </SelectControl>
           </Field>
         </Fields>
+
+        <TotalsPanel>
+          <TotalsGrid>
+            <TotalCard>
+              <p>Subtotal</p>
+              <strong>{formatMoney(saleCalculation.subtotal, form.moneda)}</strong>
+            </TotalCard>
+            <TotalCard>
+              <p>Descuento ({saleCalculation.descuentoPorcentaje.toFixed(2)}%)</p>
+              <strong>{formatMoney(saleCalculation.descuentoValor, form.moneda)}</strong>
+            </TotalCard>
+            <TotalCard>
+              <p>Impuestos</p>
+              <strong>{formatMoney(saleCalculation.impuestos, form.moneda)}</strong>
+            </TotalCard>
+            <TotalCard $featured>
+              <p>Total de venta</p>
+              <strong>{formatMoney(saleCalculation.total, form.moneda)}</strong>
+            </TotalCard>
+          </TotalsGrid>
+        </TotalsPanel>
 
         <Field>
           Fecha y hora de venta
@@ -464,7 +579,11 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
                       <td>{formatMoney(sale.precioUnitario, sale.moneda)}</td>
                       <td>{formatMoney(sale.subtotal, sale.moneda)}</td>
                       <td>{formatMoney(sale.impuestos, sale.moneda)}</td>
-                      <td>{formatMoney(sale.descuento, sale.moneda)}</td>
+                      <td>
+                        {resolveDiscountPercentage(sale.subtotal, sale.descuento).toFixed(2)}%
+                        {' / '}
+                        {formatMoney(sale.descuento, sale.moneda)}
+                      </td>
                       <td>{formatMoney(sale.total, sale.moneda)}</td>
                       <td>{sale.numeroComprobante ?? 'Sin comprobante'}</td>
                       <td>{sale.observaciones ?? 'Sin observaciones'}</td>

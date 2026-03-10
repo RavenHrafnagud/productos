@@ -190,7 +190,6 @@ export async function createSale(input: CreateSaleInput): Promise<SaleRecord> {
   }
 
   const subtotal = input.cantidad * input.precioUnitario;
-  const total = subtotal + input.impuestos - input.descuento;
   const cleanComprobante = sanitizeText(input.numeroComprobante, 80) || null;
   const cleanObservaciones = sanitizeText(input.observaciones, 220) || null;
   const insertAttempts: Array<Record<string, string | number>> = [
@@ -203,7 +202,6 @@ export async function createSale(input: CreateSaleInput): Promise<SaleRecord> {
       subtotal,
       impuestos: input.impuestos,
       descuento: input.descuento,
-      total,
       fecha: input.fecha,
       estado: input.estado,
       moneda: input.moneda,
@@ -346,7 +344,6 @@ export async function updateSale(saleId: string, input: UpdateSaleInput): Promis
 
   const actor = await resolveActorLabel();
   const subtotal = input.cantidad * input.precioUnitario;
-  const total = subtotal + input.impuestos - input.descuento;
   const observaciones = composeAuditNote(previous.observaciones ?? null, input.observaciones, 'EDITADA', actor);
 
   const payloads: Array<Record<string, string | number | null>> = [
@@ -358,7 +355,6 @@ export async function updateSale(saleId: string, input: UpdateSaleInput): Promis
       subtotal,
       impuestos: input.impuestos,
       descuento: input.descuento,
-      total,
       fecha: input.fecha,
       estado: input.estado,
       moneda: input.moneda,
@@ -374,7 +370,6 @@ export async function updateSale(saleId: string, input: UpdateSaleInput): Promis
       subtotal,
       impuestos: input.impuestos,
       descuento: input.descuento,
-      total,
       fecha: input.fecha,
       estado: input.estado,
       moneda: input.moneda,

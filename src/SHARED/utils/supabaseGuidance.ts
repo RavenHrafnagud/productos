@@ -41,6 +41,10 @@ export function toFriendlySupabaseMessage(
     return 'Hay una diferencia de esquema en movimientos de inventario. Ejecuta database/012_update_movimientos_usuario_id.sql en Supabase.';
   }
 
+  if (/cannot insert a non-default value into column "total"|column "total" can only be updated to DEFAULT/i.test(rawError)) {
+    return 'La columna total es generada por la base de datos. El formulario de ventas debe registrar subtotal, impuestos y descuento para que el total se calcule automaticamente.';
+  }
+
   if (/create_identity_user_account/i.test(rawError)) {
     return 'Falta la funcion de alta completa de usuarios. Ejecuta database/014_create_identity_user_with_auth.sql en Supabase.';
   }
