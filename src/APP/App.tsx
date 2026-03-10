@@ -83,8 +83,13 @@ function normalizeRole(roleName: string | null | undefined): UserRole {
 function hasAreaAccess(role: UserRole, area: AppArea) {
   if (role === 'administrador') return true;
   if (role === 'gerente') return area !== 'usuarios';
-  if (role === 'usuario') return area === 'dashboard' || area === 'ventas' || area === 'inventario';
-  return area === 'dashboard';
+  if (role === 'usuario') return area === 'ventas';
+  return area === 'ventas';
+}
+
+function resolveDefaultRoute(role: UserRole) {
+  if (role === 'administrador' || role === 'gerente') return '/dashboard';
+  return '/ventas';
 }
 
 export default function App() {
@@ -139,6 +144,7 @@ export default function App() {
     () => AREA_MENU.filter((item) => hasAreaAccess(identityRole, item.id)),
     [identityRole],
   );
+  const defaultRoute = useMemo(() => resolveDefaultRoute(identityRole), [identityRole]);
   const friendlyAreaError = toFriendlySupabaseMessage(error, 'general');
 
   useEffect(() => {
@@ -310,8 +316,17 @@ export default function App() {
         </SideMenu>
         <MainContent>
           <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<DashboardSection refreshKey={refreshKey} />} />
+            <Route path="/" element={<Navigate to={defaultRoute} replace />} />
+            <Route
+              path="/dashboard"
+              element={
+                hasAreaAccess(identityRole, 'dashboard') ? (
+                  <DashboardSection refreshKey={refreshKey} />
+                ) : (
+                  <Navigate to={defaultRoute} replace />
+                )
+              }
+            />
             <Route
               path="/ventas"
               element={

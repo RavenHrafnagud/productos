@@ -44,6 +44,7 @@ database/
   016_session_identity_link_and_permissions.sql  # auditoria y enlace automatico de sesion con permisos por rol
   017_align_roles_administrador_gerente_usuario.sql  # alinea validacion admin para roles "Administrador/Gerente/Usuario"
   018_identity_snapshot_rpc.sql  # snapshot JSON de identidad para cargar usuarios/roles sin conflictos de tipos
+  019_role_based_permissions.sql  # permisos por rol (Administrador/Gerente/Usuario) en RLS y grants
 ```
 
 ## Configuracion local

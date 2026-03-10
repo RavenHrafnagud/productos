@@ -289,7 +289,6 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
       const haystack = [
         sale.localNombre,
         sale.productoNombre,
-        sale.usuarioNombre,
         sale.numeroComprobante ?? '',
         sale.observaciones ?? '',
       ]
@@ -554,7 +553,6 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
                   <tr>
                     <th>Fecha</th>
                     <th>Sucursal</th>
-                    <th>Vendedor</th>
                     <th>Producto</th>
                     <th>Cant.</th>
                     <th>P. unit</th>
@@ -573,7 +571,6 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
                     <tr key={sale.id}>
                       <td>{formatDateTime(sale.fecha)}</td>
                       <td>{sale.localNombre}</td>
-                      <td>{sale.usuarioNombre}</td>
                       <td>{sale.productoNombre}</td>
                       <td>{sale.cantidad}</td>
                       <td>{formatMoney(sale.precioUnitario, sale.moneda)}</td>
