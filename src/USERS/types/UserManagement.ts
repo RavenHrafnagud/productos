@@ -16,6 +16,7 @@ export interface UserRecord {
   numeroDocumento: string;
   tipoDocumento: string | null;
   telefono: string | null;
+  direccion: string | null;
   ciudad: string | null;
   pais: string | null;
   rolId: string | null;
@@ -48,4 +49,25 @@ export interface CreateUserInput {
   apellidos: string;
   email: string;
   rolId: string;
+  telefono?: string | null;
+  direccion?: string | null;
+  ciudad?: string | null;
+  pais?: string | null;
+}
+
+export interface UpdateUserProfileInput {
+  authUserId: string;
+  tipoDocumento: string;
+  numeroDocumento: string;
+  nombres: string;
+  apellidos: string;
+  telefono?: string | null;
+  direccion?: string | null;
+  ciudad?: string | null;
+  pais?: string | null;
+  password?: string;
+}
+
+export interface DeleteUserInput {
+  authUserId: string;
 }

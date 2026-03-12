@@ -45,6 +45,10 @@ database/
   017_align_roles_administrador_gerente_usuario.sql  # alinea validacion admin para roles "Administrador/Gerente/Usuario"
   018_identity_snapshot_rpc.sql  # snapshot JSON de identidad para cargar usuarios/roles sin conflictos de tipos
   019_role_based_permissions.sql  # permisos por rol (Administrador/Gerente/Usuario) en RLS y grants
+  020_update_identity_user_profile.sql  # actualiza datos basicos de usuarios sin cambiar roles
+  021_delete_identity_user_account.sql  # elimina usuarios (auth + identidad) con validacion admin
+  022_repair_auth_instances.sql  # repara instance_id en Auth y asegura identities email
+  023_update_identity_user_password.sql  # permite actualizar contrasenas desde el panel admin
 ```
 
 ## Configuracion local
@@ -100,6 +104,9 @@ Este frontend ya esta preparado para trabajar con esas politicas de forma segura
 Para crear usuarios de negocio desde interfaz tienes 2 modos:
 - Automatico: crea cuenta en Authentication y la vincula a identidad (requiere `database/014_create_identity_user_with_auth.sql`).
 - Completar existente: detecta usuarios ya creados en Authentication sin perfil en identidad y permite completar documento/nombres/rol (requiere `database/015_identity_admin_management_rpc.sql`).
+
+Nota: si deseas crear usuarios sin enviar correo de confirmacion, desactiva "Confirm email" en
+Authentication -> Providers -> Email dentro del panel de Supabase.
 
 Para auditoria y enlace automatico de sesion (auth -> identidad -> rol), ejecuta:
 - `database/016_session_identity_link_and_permissions.sql`

@@ -84,12 +84,12 @@ function hasAreaAccess(role: UserRole, area: AppArea) {
   if (role === 'administrador') return true;
   if (role === 'gerente') return area !== 'usuarios';
   if (role === 'usuario') return area === 'ventas';
-  return area === 'ventas';
+  return area === 'dashboard';
 }
 
 function resolveDefaultRoute(role: UserRole) {
-  if (role === 'administrador' || role === 'gerente') return '/dashboard';
-  return '/ventas';
+  if (role === 'usuario') return '/ventas';
+  return '/dashboard';
 }
 
 export default function App() {
@@ -146,6 +146,7 @@ export default function App() {
   );
   const defaultRoute = useMemo(() => resolveDefaultRoute(identityRole), [identityRole]);
   const friendlyAreaError = toFriendlySupabaseMessage(error, 'general');
+  const displayError = identityRole === 'usuario' ? null : error;
 
   useEffect(() => {
     let mounted = true;
@@ -287,12 +288,12 @@ export default function App() {
         </Toolbar>
       </Header>
 
-      {(error || authError) && (
+      {(displayError || authError) && (
         <AlertStrip>
-          {error
-            ? isSetupError(error)
+          {displayError
+            ? isSetupError(displayError)
               ? friendlyAreaError
-              : error
+              : displayError
             : authError ?? 'Ocurrio un error al cargar el tablero.'}
         </AlertStrip>
       )}

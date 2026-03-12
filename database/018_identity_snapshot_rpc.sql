@@ -83,6 +83,7 @@ begin
         'nombres', p.nombres,
         'apellidos', p.apellidos,
         'telefono', p.telefono,
+        'direccion', p.direccion,
         'ciudad', p.ciudad,
         'pais', p.pais,
         'profile_complete',

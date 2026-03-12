@@ -7,7 +7,7 @@
 -- -------------------------------------------------------------------------
 begin;
 
-create extension if not exists pgcrypto;
+create extension if not exists pgcrypto with schema extensions;
 
 create or replace function public.create_identity_user_account(
   p_email text,
@@ -25,7 +25,7 @@ create or replace function public.create_identity_user_account(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, auth, identidad
+set search_path = public, auth, identidad, extensions
 as $$
 declare
   v_user_id uuid;
@@ -35,6 +35,7 @@ declare
   v_numero_documento text;
   v_nombres text;
   v_apellidos text;
+  v_instance_id uuid;
 begin
   if auth.uid() is null or not public.is_admin_user(auth.uid()) then
     raise exception 'No autorizado para crear usuarios.';
@@ -69,6 +70,26 @@ begin
     raise exception 'El rol indicado no existe.';
   end if;
 
+  -- Toma la instancia configurada en Auth.
+  select i.id
+  into v_instance_id
+  from auth.instances i
+  order by i.created_at asc
+  limit 1;
+
+  if v_instance_id is null then
+    select u.instance_id
+    into v_instance_id
+    from auth.users u
+    where u.instance_id is not null
+    order by u.created_at asc
+    limit 1;
+  end if;
+
+  if v_instance_id is null then
+    raise exception 'No se encontro instance_id valido. Ejecuta database/022_repair_auth_instances.sql en Supabase.';
+  end if;
+
   insert into auth.users (
     instance_id,
     id,
@@ -83,7 +104,7 @@ begin
     updated_at
   )
   values (
-    '00000000-0000-0000-0000-000000000000',
+    v_instance_id,
     gen_random_uuid(),
     'authenticated',
     'authenticated',

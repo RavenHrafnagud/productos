@@ -3,9 +3,11 @@
  * Incluye perfil del usuario autenticado y administracion integral de identidad.
  */
 import { FormEvent, useMemo, useState } from 'react';
+import { Country } from 'country-state-city';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
 import {
   ButtonsRow,
+  DangerButton,
   Field,
   Fields,
   FormGrid,
@@ -35,24 +37,34 @@ interface RoleForm {
 interface UserForm {
   targetAuthUserId: string;
   password: string;
+  newPassword: string;
   tipoDocumento: string;
   numeroDocumento: string;
   nombres: string;
   apellidos: string;
   email: string;
   rolId: string;
+  telefono: string;
+  direccion: string;
+  ciudad: string;
+  pais: string;
 }
 
 const EMPTY_ROLE_FORM: RoleForm = { nombre: '', descripcion: '' };
 const EMPTY_USER_FORM: UserForm = {
   targetAuthUserId: '',
   password: '',
+  newPassword: '',
   tipoDocumento: 'CC',
   numeroDocumento: '',
   nombres: '',
   apellidos: '',
   email: '',
   rolId: '',
+  telefono: '',
+  direccion: '',
+  ciudad: '',
+  pais: 'CO',
 };
 
 function getDisplayName(user: UserRecord) {
@@ -72,10 +84,16 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
     createUserError,
     createRoleStatus,
     createRoleError,
+    updateUserStatus,
+    updateUserError,
+    deleteUserStatus,
+    deleteUserError,
     assignStatus,
     assignError,
     addRole,
     addUser,
+    editUser,
+    removeUser,
     assignRole,
     reload,
   } = useUserManagement(authUserId, refreshKey);
@@ -83,10 +101,14 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
   const [userForm, setUserForm] = useState<UserForm>(EMPTY_USER_FORM);
   const [roleFormError, setRoleFormError] = useState<string | null>(null);
   const [userFormError, setUserFormError] = useState<string | null>(null);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [roleDraftByUser, setRoleDraftByUser] = useState<Record<string, string>>({});
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const friendlyLoadError = toFriendlySupabaseMessage(error, 'usuarios');
   const friendlyCreateUserError = toFriendlySupabaseMessage(createUserError, 'usuarios');
   const friendlyCreateRoleError = toFriendlySupabaseMessage(createRoleError, 'usuarios');
+  const friendlyUpdateUserError = toFriendlySupabaseMessage(updateUserError, 'usuarios');
+  const friendlyDeleteUserError = toFriendlySupabaseMessage(deleteUserError, 'usuarios');
   const friendlyAssignError = toFriendlySupabaseMessage(assignError, 'usuarios');
 
   const roleOptions = useMemo(
@@ -94,11 +116,24 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
     [roles],
   );
   const pendingUsers = useMemo(() => users.filter((user) => !user.profileComplete), [users]);
+  const countryOptions = useMemo(
+    () =>
+      Country.getAllCountries()
+        .map((country) => ({
+          code: country.isoCode,
+          label: `${country.name} (${country.isoCode})`,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [],
+  );
   const selectedPendingUser = useMemo(
     () => pendingUsers.find((user) => user.id === userForm.targetAuthUserId) ?? null,
     [pendingUsers, userForm.targetAuthUserId],
   );
   const isCompletingExisting = Boolean(userForm.targetAuthUserId);
+  const isEditingExisting = Boolean(editingUserId);
+
+  const normalizeEmailInput = (value: string) => value.trim().toLowerCase();
 
   const handleCreateRole = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -121,15 +156,41 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
 
   const handleUsePendingUser = (user: UserRecord) => {
     setUserFormError(null);
+    setEditingUserId(null);
     setUserForm({
       targetAuthUserId: user.id,
       password: '',
+      newPassword: '',
       tipoDocumento: user.tipoDocumento ?? 'CC',
       numeroDocumento: user.numeroDocumento === 'Sin documento' ? '' : user.numeroDocumento,
       nombres: /^sin nombres$/i.test(user.nombres) ? '' : user.nombres,
       apellidos: /^sin apellidos$/i.test(user.apellidos) ? '' : user.apellidos,
       email: user.email ?? '',
       rolId: user.rolId ?? '',
+      telefono: user.telefono ?? '',
+      direccion: user.direccion ?? '',
+      ciudad: user.ciudad ?? '',
+      pais: user.pais ?? 'CO',
+    });
+  };
+
+  const handleEditExistingUser = (user: UserRecord) => {
+    setUserFormError(null);
+    setEditingUserId(user.id);
+    setUserForm({
+      targetAuthUserId: '',
+      password: '',
+      newPassword: '',
+      tipoDocumento: user.tipoDocumento ?? 'CC',
+      numeroDocumento: user.numeroDocumento === 'Sin documento' ? '' : user.numeroDocumento,
+      nombres: /^sin nombres$/i.test(user.nombres) ? '' : user.nombres,
+      apellidos: /^sin apellidos$/i.test(user.apellidos) ? '' : user.apellidos,
+      email: user.email ?? '',
+      rolId: user.rolId ?? '',
+      telefono: user.telefono ?? '',
+      direccion: user.direccion ?? '',
+      ciudad: user.ciudad ?? '',
+      pais: user.pais ?? 'CO',
     });
   };
 
@@ -142,37 +203,72 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
     const apellidos = sanitizeText(userForm.apellidos, 80);
     const tipoDocumento = sanitizeText(userForm.tipoDocumento, 25) || 'CC';
     const rolId = userForm.rolId;
-    const fallbackEmail = sanitizeText(userForm.email, 120).toLowerCase();
-    const email = sanitizeText(selectedPendingUser?.email ?? fallbackEmail, 120).toLowerCase();
+    const fallbackEmail = normalizeEmailInput(userForm.email);
+    const email = normalizeEmailInput(selectedPendingUser?.email ?? fallbackEmail);
     const password = userForm.password.trim();
+    const newPassword = userForm.newPassword.trim();
+    const telefono = sanitizeText(userForm.telefono, 40);
+    const direccion = sanitizeText(userForm.direccion, 120);
+    const ciudad = sanitizeText(userForm.ciudad, 60);
+    const pais = sanitizeText(userForm.pais, 40) || 'CO';
 
-    if (!numeroDocumento || !nombres || !apellidos || !rolId) {
-      setUserFormError('Documento, nombres, apellidos y rol son obligatorios.');
+    if (!numeroDocumento || !nombres || !apellidos) {
+      setUserFormError('Documento, nombres y apellidos son obligatorios.');
       return;
     }
-    if (!email || !isValidEmail(email)) {
+    if (!isEditingExisting && !rolId) {
+      setUserFormError('Debes seleccionar un rol.');
+      return;
+    }
+    if (!isEditingExisting && (!email || !isValidEmail(email))) {
       setUserFormError('El correo del usuario no es valido.');
       return;
     }
-    if (!isCompletingExisting && !isStrongPassword(password)) {
+    if (!isCompletingExisting && !isEditingExisting && !isStrongPassword(password)) {
       setUserFormError(
         'La contrasena debe tener minimo 12 caracteres, una mayuscula, una minuscula, un numero y un simbolo.',
       );
       return;
     }
+    if (isEditingExisting && newPassword && !isStrongPassword(newPassword)) {
+      setUserFormError(
+        'La nueva contrasena debe tener minimo 12 caracteres, una mayuscula, una minuscula, un numero y un simbolo.',
+      );
+      return;
+    }
 
     try {
-      await addUser({
-        authUserId: isCompletingExisting ? userForm.targetAuthUserId : undefined,
-        password: isCompletingExisting ? '' : password,
-        tipoDocumento,
-        numeroDocumento,
-        nombres,
-        apellidos,
-        email,
-        rolId,
-      });
+      if (isEditingExisting) {
+        await editUser({
+          authUserId: editingUserId ?? '',
+          tipoDocumento,
+          numeroDocumento,
+          nombres,
+          apellidos,
+          telefono,
+          direccion,
+          ciudad,
+          pais,
+          password: newPassword || undefined,
+        });
+      } else {
+        await addUser({
+          authUserId: isCompletingExisting ? userForm.targetAuthUserId : undefined,
+          password: isCompletingExisting ? '' : password,
+          tipoDocumento,
+          numeroDocumento,
+          nombres,
+          apellidos,
+          email,
+          rolId,
+          telefono,
+          direccion,
+          ciudad,
+          pais,
+        });
+      }
       setUserForm(EMPTY_USER_FORM);
+      setEditingUserId(null);
     } catch {
       // El detalle se muestra en createUserError.
     }
@@ -185,6 +281,23 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
       await assignRole(userId, roleId);
     } catch {
       // El detalle se muestra en assignError.
+    }
+  };
+
+  const handleDeleteUser = async (user: UserRecord) => {
+    if (user.id === authUserId) return;
+    const name = getDisplayName(user);
+    const confirmed = window.confirm(
+      `Eliminar usuario ${name}?\nEsta accion elimina Auth, identidad y sus ventas/movimientos asociados.`,
+    );
+    if (!confirmed) return;
+    try {
+      setDeletingUserId(user.id);
+      await removeUser({ authUserId: user.id });
+    } catch {
+      // El detalle se muestra en deleteUserError.
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -284,41 +397,17 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
       <FormGrid onSubmit={handleCreateUser}>
         <Fields>
           <Field>
-            Usuario existente (opcional)
-            <SelectControl
-              value={userForm.targetAuthUserId}
-              onChange={(event) =>
-                setUserForm((prev) => ({
-                  ...prev,
-                  targetAuthUserId: event.target.value,
-                  password: '',
-                  email:
-                    pendingUsers.find((user) => user.id === event.target.value)?.email ??
-                    (event.target.value ? '' : prev.email),
-                }))
-              }
-            >
-              <option value="">Crear usuario nuevo</option>
-              {pendingUsers.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.email ?? user.id}
-                </option>
-              ))}
-            </SelectControl>
-          </Field>
-
-          <Field>
             Correo
             <InputControl
               type="email"
               value={selectedPendingUser?.email ?? userForm.email}
               onChange={(event) => setUserForm((prev) => ({ ...prev, email: event.target.value }))}
-              readOnly={isCompletingExisting}
+              readOnly={isCompletingExisting || isEditingExisting}
               required
             />
           </Field>
 
-          {!isCompletingExisting && (
+          {!isCompletingExisting && !isEditingExisting && (
             <Field>
               Contrasena inicial
               <InputControl
@@ -330,14 +419,32 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
               />
             </Field>
           )}
+          {isEditingExisting && (
+            <Field>
+              Nueva contrasena (opcional)
+              <InputControl
+                type="password"
+                value={userForm.newPassword}
+                onChange={(event) => setUserForm((prev) => ({ ...prev, newPassword: event.target.value }))}
+                placeholder="Mantener en blanco si no deseas cambiarla"
+              />
+            </Field>
+          )}
 
           <Field>
             Tipo documento
-            <InputControl
+            <SelectControl
               value={userForm.tipoDocumento}
               onChange={(event) => setUserForm((prev) => ({ ...prev, tipoDocumento: event.target.value }))}
-              placeholder="CC"
-            />
+            >
+              <option value="CC">CC</option>
+              <option value="TI">TI</option>
+              <option value="CE">CE</option>
+              <option value="PAS">PAS</option>
+              <option value="NIT">NIT</option>
+              <option value="RC">RC</option>
+              <option value="PEP">PEP</option>
+            </SelectControl>
           </Field>
           <Field>
             Numero documento
@@ -368,7 +475,8 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
             <SelectControl
               value={userForm.rolId}
               onChange={(event) => setUserForm((prev) => ({ ...prev, rolId: event.target.value }))}
-              required
+              required={!isEditingExisting}
+              disabled={isEditingExisting}
             >
               <option value="">Selecciona un rol</option>
               {roleOptions.map((role) => (
@@ -378,33 +486,88 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
               ))}
             </SelectControl>
           </Field>
+          <Field>
+            Telefono
+            <InputControl
+              value={userForm.telefono}
+              onChange={(event) => setUserForm((prev) => ({ ...prev, telefono: event.target.value }))}
+              placeholder="+57 300 000 0000"
+            />
+          </Field>
+          <Field>
+            Direccion
+            <InputControl
+              value={userForm.direccion}
+              onChange={(event) => setUserForm((prev) => ({ ...prev, direccion: event.target.value }))}
+              placeholder="Cra 10 # 20-30"
+            />
+          </Field>
+          <Field>
+            Ciudad
+            <InputControl
+              value={userForm.ciudad}
+              onChange={(event) => setUserForm((prev) => ({ ...prev, ciudad: event.target.value }))}
+              placeholder="Bogota"
+            />
+          </Field>
+          <Field>
+            Pais
+            <SelectControl
+              value={userForm.pais}
+              onChange={(event) => setUserForm((prev) => ({ ...prev, pais: event.target.value }))}
+            >
+              {countryOptions.map((country) => (
+                <option key={country.code} value={country.code}>
+                  {country.label}
+                </option>
+              ))}
+            </SelectControl>
+          </Field>
         </Fields>
 
-        {(userFormError || friendlyCreateUserError) && (
+        {(userFormError || friendlyCreateUserError || friendlyUpdateUserError) && (
           <StatusState
-            kind={userFormError ? 'error' : isSetupError(createUserError) ? 'info' : 'error'}
-            message={userFormError ?? friendlyCreateUserError ?? 'Error inesperado.'}
+            kind={userFormError ? 'error' : isSetupError(createUserError ?? updateUserError) ? 'info' : 'error'}
+            message={userFormError ?? friendlyCreateUserError ?? friendlyUpdateUserError ?? 'Error inesperado.'}
           />
         )}
 
-        <StatusState
-          kind="info"
-          message={
-            isCompletingExisting
-              ? 'Estas completando datos faltantes de un usuario ya existente en Authentication.'
-              : 'La creacion es automatica: genera el usuario en Authentication y lo vincula a identidad.'
-          }
-        />
+        {/* Mensajes informativos de flujo removidos por solicitud */}
 
-        {createUserStatus === 'success' && <StatusState kind="info" message="Usuario guardado correctamente." />}
+        {createUserStatus === 'success' && !isEditingExisting && (
+          <StatusState kind="info" message="Usuario guardado correctamente." />
+        )}
+        {updateUserStatus === 'success' && (
+          <StatusState kind="info" message="Usuario actualizado correctamente." />
+        )}
 
         <ButtonsRow>
-          <PrimaryButton type="submit" disabled={createUserStatus === 'submitting'}>
-            {createUserStatus === 'submitting' ? 'Guardando usuario...' : 'Guardar usuario'}
+          <PrimaryButton
+            type="submit"
+            disabled={createUserStatus === 'submitting' || updateUserStatus === 'submitting'}
+          >
+            {isEditingExisting
+              ? updateUserStatus === 'submitting'
+                ? 'Actualizando usuario...'
+                : 'Actualizar usuario'
+              : createUserStatus === 'submitting'
+                ? 'Guardando usuario...'
+                : 'Guardar usuario'}
           </PrimaryButton>
           <GhostButton type="button" onClick={() => setUserForm(EMPTY_USER_FORM)}>
             Limpiar formulario
           </GhostButton>
+          {isEditingExisting && (
+            <GhostButton
+              type="button"
+              onClick={() => {
+                setEditingUserId(null);
+                setUserForm(EMPTY_USER_FORM);
+              }}
+            >
+              Cancelar edicion
+            </GhostButton>
+          )}
           <GhostButton type="button" onClick={() => reload()}>
             Actualizar usuarios
           </GhostButton>
@@ -424,6 +587,12 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
           message={friendlyAssignError ?? 'Rol asignado correctamente.'}
         />
       )}
+      {(friendlyDeleteUserError || deleteUserStatus === 'success') && (
+        <StatusState
+          kind={friendlyDeleteUserError ? 'error' : 'info'}
+          message={friendlyDeleteUserError ?? 'Usuario eliminado correctamente.'}
+        />
+      )}
 
       {status === 'success' && users.length > 0 && (
         <TableWrap>
@@ -433,18 +602,33 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
                 <th>Usuario</th>
                 <th>Email</th>
                 <th>Documento</th>
+                <th>Tipo</th>
+                <th>Telefono</th>
+                <th>Ciudad</th>
+                <th>Pais</th>
+                <th>Direccion</th>
                 <th>Estado</th>
                 <th>Rol</th>
                 <th>Perfil</th>
+                <th>Editar</th>
                 <th>Asignar rol</th>
+                <th>Eliminar</th>
               </tr>
             </thead>
             <tbody>
               {users.map((user) => (
                 <tr key={user.id}>
-                  <td>{getDisplayName(user)}</td>
+                  <td>
+                    {getDisplayName(user)}
+                    {user.id === authUserId && <Tag $tone="ok">Tu cuenta</Tag>}
+                  </td>
                   <td>{user.email ?? 'Sin email'}</td>
                   <td>{user.numeroDocumento}</td>
+                  <td>{user.tipoDocumento ?? 'Sin tipo'}</td>
+                  <td>{user.telefono ?? 'Sin telefono'}</td>
+                  <td>{user.ciudad ?? 'Sin ciudad'}</td>
+                  <td>{user.pais ?? 'Sin pais'}</td>
+                  <td>{user.direccion ?? 'Sin direccion'}</td>
                   <td>
                     <Tag $tone={user.estado ? 'ok' : 'off'}>{user.estado ? 'Activo' : 'Inactivo'}</Tag>
                   </td>
@@ -455,29 +639,55 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
                     </Tag>
                   </td>
                   <td>
-                    <ButtonsRow>
-                      <SelectControl
-                        value={roleDraftByUser[user.id] ?? user.rolId ?? ''}
-                        onChange={(event) =>
-                          setRoleDraftByUser((prev) => ({ ...prev, [user.id]: event.target.value }))
-                        }
-                        disabled={!user.profileComplete}
-                      >
-                        <option value="">Selecciona un rol</option>
-                        {roleOptions.map((role) => (
-                          <option key={role.id} value={role.id}>
-                            {role.name}
-                          </option>
-                        ))}
-                      </SelectControl>
-                      <GhostButton
+                    <GhostButton
+                      type="button"
+                      onClick={() => handleEditExistingUser(user)}
+                      disabled={!user.profileComplete}
+                    >
+                      Editar
+                    </GhostButton>
+                  </td>
+                  <td>
+                    {user.id === authUserId ? (
+                      <Tag $tone="off">No aplica</Tag>
+                    ) : (
+                      <ButtonsRow>
+                        <SelectControl
+                          value={roleDraftByUser[user.id] ?? user.rolId ?? ''}
+                          onChange={(event) =>
+                            setRoleDraftByUser((prev) => ({ ...prev, [user.id]: event.target.value }))
+                          }
+                          disabled={!user.profileComplete}
+                        >
+                          <option value="">Selecciona un rol</option>
+                          {roleOptions.map((role) => (
+                            <option key={role.id} value={role.id}>
+                              {role.name}
+                            </option>
+                          ))}
+                        </SelectControl>
+                        <GhostButton
+                          type="button"
+                          onClick={() => handleAssignRole(user.id, user.rolId)}
+                          disabled={assignStatus === 'submitting' || !user.profileComplete}
+                        >
+                          Asignar
+                        </GhostButton>
+                      </ButtonsRow>
+                    )}
+                  </td>
+                  <td>
+                    {user.id === authUserId ? (
+                      <Tag $tone="off">No aplica</Tag>
+                    ) : (
+                      <DangerButton
                         type="button"
-                        onClick={() => handleAssignRole(user.id, user.rolId)}
-                        disabled={assignStatus === 'submitting' || !user.profileComplete}
+                        onClick={() => handleDeleteUser(user)}
+                        disabled={deleteUserStatus === 'submitting' || deletingUserId === user.id}
                       >
-                        Asignar
-                      </GhostButton>
-                    </ButtonsRow>
+                        Eliminar
+                      </DangerButton>
+                    )}
                   </td>
                 </tr>
               ))}

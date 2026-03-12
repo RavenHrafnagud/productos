@@ -30,9 +30,23 @@ export async function signInWithEmail(email: string, password: string) {
     password,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (/Database error querying schema/i.test(error.message)) {
+      throw new Error(
+        'Error de instancia Auth. Ejecuta database/022_repair_auth_instances.sql en Supabase.',
+      );
+    }
+    throw new Error(error.message);
+  }
   if (data.session) {
-    await syncIdentitySessionLink();
+    try {
+      await syncIdentitySessionLink();
+    } catch (err) {
+      // Evita bloquear el inicio de sesion por fallos de auditoria.
+      // La auditoria se reintenta desde useAuthSession.
+      // eslint-disable-next-line no-console
+      console.warn('Auditoria de sesion fallida durante login:', err);
+    }
   }
   return data.session;
 }

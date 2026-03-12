@@ -16,6 +16,16 @@ const supabaseClient = isSupabaseConfigured
     })
   : null;
 
+const supabaseEphemeralClient = isSupabaseConfigured
+  ? createClient<Database>(appEnv.supabaseUrl, appEnv.supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    })
+  : null;
+
 export function getSupabaseClient() {
   if (!supabaseClient) {
     throw new Error(
@@ -24,4 +34,14 @@ export function getSupabaseClient() {
   }
 
   return supabaseClient;
+}
+
+export function getSupabaseEphemeralClient() {
+  if (!supabaseEphemeralClient) {
+    throw new Error(
+      'Faltan variables de entorno para Supabase. Revisa VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.',
+    );
+  }
+
+  return supabaseEphemeralClient;
 }

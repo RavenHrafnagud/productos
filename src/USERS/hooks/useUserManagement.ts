@@ -7,13 +7,17 @@ import {
   assignRoleToUser,
   createRole,
   createUser,
+  deleteUserAccount,
   getIdentitySnapshot,
+  updateUserProfile,
 } from '../api/userManagementRepository';
 import type {
   CreateRoleInput,
   CreateUserInput,
+  DeleteUserInput,
   MyProfile,
   RoleRecord,
+  UpdateUserProfileInput,
   UserRecord,
 } from '../types/UserManagement';
 
@@ -27,11 +31,17 @@ interface UseUserManagementResult {
   createUserError: string | null;
   createRoleStatus: 'idle' | 'submitting' | 'success' | 'error';
   createRoleError: string | null;
+  updateUserStatus: 'idle' | 'submitting' | 'success' | 'error';
+  updateUserError: string | null;
+  deleteUserStatus: 'idle' | 'submitting' | 'success' | 'error';
+  deleteUserError: string | null;
   assignStatus: 'idle' | 'submitting' | 'success' | 'error';
   assignError: string | null;
   reload: () => Promise<void>;
   addRole: (input: CreateRoleInput) => Promise<void>;
   addUser: (input: CreateUserInput) => Promise<void>;
+  editUser: (input: UpdateUserProfileInput) => Promise<void>;
+  removeUser: (input: DeleteUserInput) => Promise<void>;
   assignRole: (userId: string, roleId: string) => Promise<void>;
 }
 
@@ -45,6 +55,10 @@ export function useUserManagement(authUserId: string, refreshKey: number): UseUs
   const [createUserError, setCreateUserError] = useState<string | null>(null);
   const [createRoleStatus, setCreateRoleStatus] = useState<UseUserManagementResult['createRoleStatus']>('idle');
   const [createRoleError, setCreateRoleError] = useState<string | null>(null);
+  const [updateUserStatus, setUpdateUserStatus] = useState<UseUserManagementResult['updateUserStatus']>('idle');
+  const [updateUserError, setUpdateUserError] = useState<string | null>(null);
+  const [deleteUserStatus, setDeleteUserStatus] = useState<UseUserManagementResult['deleteUserStatus']>('idle');
+  const [deleteUserError, setDeleteUserError] = useState<string | null>(null);
   const [assignStatus, setAssignStatus] = useState<UseUserManagementResult['assignStatus']>('idle');
   const [assignError, setAssignError] = useState<string | null>(null);
 
@@ -97,6 +111,40 @@ export function useUserManagement(authUserId: string, refreshKey: number): UseUs
     [reload],
   );
 
+  const editUser = useCallback(
+    async (input: UpdateUserProfileInput) => {
+      setUpdateUserStatus('submitting');
+      setUpdateUserError(null);
+      try {
+        await updateUserProfile(input);
+        setUpdateUserStatus('success');
+        await reload();
+      } catch (err) {
+        setUpdateUserStatus('error');
+        setUpdateUserError(err instanceof Error ? err.message : 'No se pudo actualizar el usuario.');
+        throw err;
+      }
+    },
+    [reload],
+  );
+
+  const removeUser = useCallback(
+    async (input: DeleteUserInput) => {
+      setDeleteUserStatus('submitting');
+      setDeleteUserError(null);
+      try {
+        await deleteUserAccount(input);
+        setDeleteUserStatus('success');
+        await reload();
+      } catch (err) {
+        setDeleteUserStatus('error');
+        setDeleteUserError(err instanceof Error ? err.message : 'No se pudo eliminar el usuario.');
+        throw err;
+      }
+    },
+    [reload],
+  );
+
   const assignRole = useCallback(
     async (userId: string, roleId: string) => {
       setAssignStatus('submitting');
@@ -128,11 +176,17 @@ export function useUserManagement(authUserId: string, refreshKey: number): UseUs
     createUserError,
     createRoleStatus,
     createRoleError,
+    updateUserStatus,
+    updateUserError,
+    deleteUserStatus,
+    deleteUserError,
     assignStatus,
     assignError,
     reload,
     addRole,
     addUser,
+    editUser,
+    removeUser,
     assignRole,
   };
 }

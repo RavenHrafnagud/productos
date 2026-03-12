@@ -10,6 +10,8 @@ begin;
 
 create extension if not exists pgcrypto;
 
+drop function if exists public.list_identity_users();
+
 create or replace function public.get_identity_context()
 returns table (
   auth_user_id uuid,
@@ -124,6 +126,7 @@ returns table (
   nombres text,
   apellidos text,
   telefono text,
+  direccion text,
   ciudad text,
   pais text,
   profile_complete boolean
@@ -152,6 +155,7 @@ begin
     p.nombres::text,
     p.apellidos::text,
     p.telefono::text,
+    p.direccion::text,
     p.ciudad::text,
     p.pais::text,
     (
