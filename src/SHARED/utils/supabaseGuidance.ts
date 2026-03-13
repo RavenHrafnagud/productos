@@ -67,24 +67,24 @@ export function toFriendlySupabaseMessage(
 
   if (isSetupError(rawError)) {
     if (context === 'sucursales') {
-      return 'Primero crea una sucursal.';
+      return 'Crea primero una sucursal.';
     }
     if (context === 'productos') {
-      return 'Primero crea un producto.';
+      return 'Crea primero un producto.';
     }
     if (context === 'inventario') {
-      return 'Primero crea un inventario.';
+      return 'Crea primero un inventario.';
     }
     if (context === 'ventas') {
-      return 'Primero crea ventas y valida que el esquema ventas este expuesto en Data API.';
+      return 'Crea primero ventas y valida que el esquema ventas este expuesto en Data API.';
     }
     if (context === 'usuarios') {
-      return 'Primero valida el esquema identidad y ejecuta database/013_refactor_identidad_estado_roles.sql, database/015_identity_admin_management_rpc.sql, database/016_session_identity_link_and_permissions.sql, database/018_identity_snapshot_rpc.sql y database/020_update_identity_user_profile.sql.';
+      return 'Valida primero el esquema identidad y ejecuta database/013_refactor_identidad_estado_roles.sql, database/015_identity_admin_management_rpc.sql, database/016_session_identity_link_and_permissions.sql, database/018_identity_snapshot_rpc.sql y database/020_update_identity_user_profile.sql.';
     }
     if (context === 'dashboard') {
-      return 'Primero registra ventas para poblar el dashboard.';
+      return 'Registra primero ventas para poblar el dashboard.';
     }
-    return 'Primero crea las sucursales y productos.';
+    return 'Crea primero las sucursales y productos.';
   }
 
   if (isPermissionError(rawError)) {

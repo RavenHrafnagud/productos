@@ -3,11 +3,13 @@
  * Incluye perfil del usuario autenticado y administracion integral de identidad.
  */
 import { FormEvent, useMemo, useState } from 'react';
+import styled from 'styled-components';
 import { Country } from 'country-state-city';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
 import {
   ButtonsRow,
   DangerButton,
+  Divider,
   Field,
   Fields,
   FormGrid,
@@ -67,6 +69,62 @@ const EMPTY_USER_FORM: UserForm = {
   pais: 'CO',
 };
 
+const SummaryGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+`;
+
+const SummaryCard = styled.article`
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 18px rgba(12, 26, 20, 0.06);
+
+  p {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  strong {
+    display: block;
+    margin-top: 4px;
+    font-size: 1.05rem;
+  }
+`;
+
+const RoleAssignRow = styled.div.attrs({ className: 'no-wrap' })`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+
+  select {
+    width: auto;
+    max-width: 240px;
+    min-width: 120px;
+    flex: 0 0 auto;
+  }
+
+  button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 720px) {
+    flex-wrap: wrap;
+
+    select,
+    button {
+      width: 100%;
+    }
+  }
+`;
+
 function getDisplayName(user: UserRecord) {
   const fullName = `${user.nombres} ${user.apellidos}`.trim();
   const invalidName = /^sin nombres\s+sin apellidos$/i.test(fullName);
@@ -116,6 +174,13 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
     [roles],
   );
   const pendingUsers = useMemo(() => users.filter((user) => !user.profileComplete), [users]);
+  const summary = useMemo(() => {
+    const total = users.length;
+    const active = users.filter((user) => user.estado).length;
+    const pending = pendingUsers.length;
+    const rolesCount = roles.length;
+    return { total, active, pending, rolesCount };
+  }, [pendingUsers.length, roles.length, users]);
   const countryOptions = useMemo(
     () =>
       Country.getAllCountries()
@@ -308,10 +373,29 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
         <SectionMeta>{users.length} cuentas detectadas</SectionMeta>
       </SectionHeader>
 
+      <SummaryGrid>
+        <SummaryCard>
+          <p>Total de cuentas</p>
+          <strong>{summary.total}</strong>
+        </SummaryCard>
+        <SummaryCard>
+          <p>Usuarios activos</p>
+          <strong>{summary.active}</strong>
+        </SummaryCard>
+        <SummaryCard>
+          <p>Perfiles pendientes</p>
+          <strong>{summary.pending}</strong>
+        </SummaryCard>
+        <SummaryCard>
+          <p>Roles disponibles</p>
+          <strong>{summary.rolesCount}</strong>
+        </SummaryCard>
+      </SummaryGrid>
+
       {profile ? (
         <StatusState
           kind="info"
-          message={`Sesion: ${profile.nombres} ${profile.apellidos} | Rol: ${profile.rolNombre ?? 'Sin rol'} | Estado: ${profile.estado ? 'Activo' : 'Inactivo'}`}
+          message={`Sesion activa: ${profile.nombres} ${profile.apellidos} | Rol: ${profile.rolNombre ?? 'Sin rol'} | Estado: ${profile.estado ? 'Activo' : 'Inactivo'}`}
         />
       ) : (
         <StatusState kind="empty" message="No se encontro perfil de identidad para la sesion actual." />
@@ -327,7 +411,7 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
             <InputControl
               value={roleForm.nombre}
               onChange={(event) => setRoleForm((prev) => ({ ...prev, nombre: event.target.value }))}
-              placeholder="vendedor"
+              placeholder="Ej: vendedor"
               required
             />
           </Field>
@@ -336,7 +420,7 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
             <TextAreaControl
               value={roleForm.descripcion}
               onChange={(event) => setRoleForm((prev) => ({ ...prev, descripcion: event.target.value }))}
-              placeholder="Permisos comerciales para ventas e inventario."
+              placeholder="Ej: Permisos comerciales para ventas e inventario."
             />
           </Field>
         </Fields>
@@ -355,6 +439,8 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
           </PrimaryButton>
         </ButtonsRow>
       </FormGrid>
+
+      <Divider />
 
       <SectionHeader>
         <SectionTitle>Completar usuarios pendientes</SectionTitle>
@@ -391,6 +477,8 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
         </TableWrap>
       )}
 
+      <Divider />
+
       <SectionHeader>
         <SectionTitle>Crear o completar usuario</SectionTitle>
       </SectionHeader>
@@ -414,7 +502,7 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
                 type="password"
                 value={userForm.password}
                 onChange={(event) => setUserForm((prev) => ({ ...prev, password: event.target.value }))}
-                placeholder="Contrasena segura"
+                placeholder="Ej: Contrasena segura"
                 required
               />
             </Field>
@@ -426,7 +514,7 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
                 type="password"
                 value={userForm.newPassword}
                 onChange={(event) => setUserForm((prev) => ({ ...prev, newPassword: event.target.value }))}
-                placeholder="Mantener en blanco si no deseas cambiarla"
+                placeholder="Ej: Nueva contrasena segura"
               />
             </Field>
           )}
@@ -491,7 +579,7 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
             <InputControl
               value={userForm.telefono}
               onChange={(event) => setUserForm((prev) => ({ ...prev, telefono: event.target.value }))}
-              placeholder="+57 300 000 0000"
+              placeholder="Ej: +57 300 000 0000"
             />
           </Field>
           <Field>
@@ -499,7 +587,7 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
             <InputControl
               value={userForm.direccion}
               onChange={(event) => setUserForm((prev) => ({ ...prev, direccion: event.target.value }))}
-              placeholder="Cra 10 # 20-30"
+              placeholder="Ej: Cra 10 # 20-30"
             />
           </Field>
           <Field>
@@ -507,7 +595,7 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
             <InputControl
               value={userForm.ciudad}
               onChange={(event) => setUserForm((prev) => ({ ...prev, ciudad: event.target.value }))}
-              placeholder="Bogota"
+              placeholder="Ej: Bogota"
             />
           </Field>
           <Field>
@@ -574,6 +662,8 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
         </ButtonsRow>
       </FormGrid>
 
+      <Divider />
+
       {status === 'loading' && <StatusState kind="loading" message="Cargando usuarios y roles..." />}
       {status === 'error' && (
         <StatusState
@@ -601,18 +691,18 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
               <tr>
                 <th>Usuario</th>
                 <th>Email</th>
-                <th>Documento</th>
-                <th>Tipo</th>
-                <th>Telefono</th>
-                <th>Ciudad</th>
-                <th>Pais</th>
-                <th>Direccion</th>
+                <th className="hide-mobile num">Documento</th>
+                <th className="hide-mobile">Tipo</th>
+                <th className="hide-mobile">Telefono</th>
+                <th className="hide-mobile">Ciudad</th>
+                <th className="hide-mobile">Pais</th>
+                <th className="hide-mobile">Direccion</th>
                 <th>Estado</th>
                 <th>Rol</th>
                 <th>Perfil</th>
-                <th>Editar</th>
-                <th>Asignar rol</th>
-                <th>Eliminar</th>
+                <th className="actions">Editar</th>
+                <th className="actions">Asignar rol</th>
+                <th className="actions">Eliminar</th>
               </tr>
             </thead>
             <tbody>
@@ -623,12 +713,12 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
                     {user.id === authUserId && <Tag $tone="ok">Tu cuenta</Tag>}
                   </td>
                   <td>{user.email ?? 'Sin email'}</td>
-                  <td>{user.numeroDocumento}</td>
-                  <td>{user.tipoDocumento ?? 'Sin tipo'}</td>
-                  <td>{user.telefono ?? 'Sin telefono'}</td>
-                  <td>{user.ciudad ?? 'Sin ciudad'}</td>
-                  <td>{user.pais ?? 'Sin pais'}</td>
-                  <td>{user.direccion ?? 'Sin direccion'}</td>
+                  <td className="hide-mobile num">{user.numeroDocumento}</td>
+                  <td className="hide-mobile">{user.tipoDocumento ?? 'Sin tipo'}</td>
+                  <td className="hide-mobile">{user.telefono ?? 'Sin telefono'}</td>
+                  <td className="hide-mobile">{user.ciudad ?? 'Sin ciudad'}</td>
+                  <td className="hide-mobile">{user.pais ?? 'Sin pais'}</td>
+                  <td className="hide-mobile">{user.direccion ?? 'Sin direccion'}</td>
                   <td>
                     <Tag $tone={user.estado ? 'ok' : 'off'}>{user.estado ? 'Activo' : 'Inactivo'}</Tag>
                   </td>
@@ -638,7 +728,7 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
                       {user.profileComplete ? 'Completo' : 'Pendiente'}
                     </Tag>
                   </td>
-                  <td>
+                  <td className="actions">
                     <GhostButton
                       type="button"
                       onClick={() => handleEditExistingUser(user)}
@@ -647,12 +737,13 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
                       Editar
                     </GhostButton>
                   </td>
-                  <td>
+                  <td className="actions">
                     {user.id === authUserId ? (
                       <Tag $tone="off">No aplica</Tag>
                     ) : (
-                      <ButtonsRow>
+                      <RoleAssignRow>
                         <SelectControl
+                          className="fit-content"
                           value={roleDraftByUser[user.id] ?? user.rolId ?? ''}
                           onChange={(event) =>
                             setRoleDraftByUser((prev) => ({ ...prev, [user.id]: event.target.value }))
@@ -673,10 +764,10 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
                         >
                           Asignar
                         </GhostButton>
-                      </ButtonsRow>
+                      </RoleAssignRow>
                     )}
                   </td>
-                  <td>
+                  <td className="actions">
                     {user.id === authUserId ? (
                       <Tag $tone="off">No aplica</Tag>
                     ) : (

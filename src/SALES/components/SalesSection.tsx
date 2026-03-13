@@ -51,8 +51,9 @@ interface SaleForm {
 const TotalsPanel = styled.section`
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
-  background: linear-gradient(140deg, #fcfffe 0%, #f0fbf5 100%);
-  padding: 12px;
+  background: linear-gradient(140deg, #ffffff 0%, #f1faf6 100%);
+  padding: 14px;
+  box-shadow: 0 12px 24px rgba(16, 32, 26, 0.08);
 `;
 
 const TotalsGrid = styled.div`
@@ -72,8 +73,10 @@ const TotalsGrid = styled.div`
 const TotalCard = styled.article<{ $featured?: boolean }>`
   border: 1px solid ${({ $featured }) => ($featured ? '#79bda0' : 'var(--border-soft)')};
   border-radius: var(--radius-sm);
-  background: ${({ $featured }) => ($featured ? 'linear-gradient(130deg, #e5f8ee 0%, #d4f1e2 100%)' : '#fff')};
-  padding: 10px;
+  background: ${({ $featured }) =>
+    $featured ? 'linear-gradient(130deg, #e3f7ed 0%, #cfeedd 100%)' : 'rgba(255, 255, 255, 0.9)'};
+  padding: 12px;
+  box-shadow: ${({ $featured }) => ($featured ? '0 10px 18px rgba(18, 40, 32, 0.12)' : 'none')};
 
   p {
     margin: 0;
@@ -86,6 +89,60 @@ const TotalCard = styled.article<{ $featured?: boolean }>`
     display: block;
     font-size: 1rem;
     color: ${({ $featured }) => ($featured ? '#10563c' : 'var(--text-main)')};
+  }
+`;
+
+const FilterBar = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 8px 18px rgba(12, 26, 20, 0.06);
+`;
+
+const TableActions = styled.div.attrs({ className: 'no-wrap' })`
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+`;
+
+const HistoryPanel = styled.section`
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbf9 100%);
+  padding: 12px;
+  box-shadow: 0 10px 20px rgba(12, 26, 20, 0.06);
+`;
+
+const SummaryStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+`;
+
+const SummaryChip = styled.article`
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.9);
+
+  p {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  strong {
+    display: block;
+    margin-top: 4px;
+    font-size: 1.02rem;
   }
 `;
 
@@ -298,6 +355,14 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
     });
   }, [filterEstado, sales, searchText]);
 
+  const visibleSummary = useMemo(() => {
+    const totalVentas = visibleSales.length;
+    const totalIngresos = visibleSales.reduce((sum, sale) => sum + sale.total, 0);
+    const totalUnidades = visibleSales.reduce((sum, sale) => sum + sale.cantidad, 0);
+    const ticketPromedio = totalVentas > 0 ? totalIngresos / totalVentas : 0;
+    return { totalVentas, totalIngresos, totalUnidades, ticketPromedio };
+  }, [visibleSales]);
+
   return (
     <SectionCard>
       <SectionHeader>
@@ -353,7 +418,7 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
               inputMode="decimal"
               value={form.cantidad}
               onChange={(event) => setForm((prev) => ({ ...prev, cantidad: event.target.value }))}
-              placeholder="1"
+              placeholder="Ej: 1"
               required
             />
           </Field>
@@ -364,7 +429,7 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
               inputMode="decimal"
               value={form.precioUnitario}
               onChange={(event) => setForm((prev) => ({ ...prev, precioUnitario: event.target.value }))}
-              placeholder="90000"
+              placeholder="Ej: 90000"
               required
             />
           </Field>
@@ -375,7 +440,7 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
               inputMode="decimal"
               value={form.impuestos}
               onChange={(event) => setForm((prev) => ({ ...prev, impuestos: event.target.value }))}
-              placeholder="0"
+              placeholder="Ej: 0"
               required
             />
           </Field>
@@ -386,7 +451,7 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
               inputMode="decimal"
               value={form.descuentoPorcentaje}
               onChange={(event) => setForm((prev) => ({ ...prev, descuentoPorcentaje: event.target.value }))}
-              placeholder="0"
+              placeholder="Ej: 0"
               required
             />
           </Field>
@@ -461,7 +526,7 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
             <InputControl
               value={form.numeroComprobante}
               onChange={(event) => setForm((prev) => ({ ...prev, numeroComprobante: event.target.value }))}
-              placeholder="FAC-2026-00041"
+              placeholder="Ej: FAC-2026-00041"
             />
           </Field>
           <Field>
@@ -469,7 +534,7 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
             <TextAreaControl
               value={form.observaciones}
               onChange={(event) => setForm((prev) => ({ ...prev, observaciones: event.target.value }))}
-              placeholder="Observaciones de la venta."
+              placeholder="Ej: Observaciones sobre la venta."
             />
           </Field>
         </Fields>
@@ -516,105 +581,126 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
         />
       )}
       {status === 'success' && sales.length === 0 && (
-        <StatusState kind="empty" message="Aun no hay ventas registradas." />
+        <StatusState kind="empty" message="No hay ventas registradas. Registra la primera en el formulario." />
       )}
 
       {status === 'success' && sales.length > 0 && (
         <>
-          <Fields>
-            <Field>
-              Buscar en historial
-              <InputControl
-                value={searchText}
-                onChange={(event) => setSearchText(event.target.value)}
-                placeholder="Sucursal, producto, usuario, comprobante..."
-              />
-            </Field>
-            <Field>
-              Estado
-              <SelectControl
-                value={filterEstado}
-                onChange={(event) => setFilterEstado(event.target.value as typeof filterEstado)}
-              >
-                <option value="TODAS">TODAS</option>
-                <option value="BORRADOR">BORRADOR</option>
-                <option value="CONFIRMADA">CONFIRMADA</option>
-                <option value="ANULADA">ANULADA</option>
-              </SelectControl>
-            </Field>
-          </Fields>
+          <HistoryPanel>
+            <SummaryStrip>
+              <SummaryChip>
+                <p>Ventas visibles</p>
+                <strong>{visibleSummary.totalVentas}</strong>
+              </SummaryChip>
+              <SummaryChip>
+                <p>Unidades vendidas</p>
+                <strong>{visibleSummary.totalUnidades}</strong>
+              </SummaryChip>
+              <SummaryChip>
+                <p>Ingresos</p>
+                <strong>{formatMoney(visibleSummary.totalIngresos)}</strong>
+              </SummaryChip>
+              <SummaryChip>
+                <p>Ticket promedio</p>
+                <strong>{formatMoney(visibleSummary.ticketPromedio)}</strong>
+              </SummaryChip>
+            </SummaryStrip>
 
-          {visibleSales.length === 0 ? (
-            <StatusState kind="empty" message="No hay ventas que coincidan con tus filtros." />
-          ) : (
-            <TableWrap>
-              <DataTable>
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Sucursal</th>
-                    <th>Producto</th>
-                    <th>Cant.</th>
-                    <th>P. unit</th>
-                    <th>Subtotal</th>
-                    <th>Imp.</th>
-                    <th>Desc.</th>
-                    <th>Total</th>
-                    <th>Comprobante</th>
-                    <th>Observaciones</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleSales.map((sale) => (
-                    <tr key={sale.id}>
-                      <td>{formatDateTime(sale.fecha)}</td>
-                      <td>{sale.localNombre}</td>
-                      <td>{sale.productoNombre}</td>
-                      <td>{sale.cantidad}</td>
-                      <td>{formatMoney(sale.precioUnitario, sale.moneda)}</td>
-                      <td>{formatMoney(sale.subtotal, sale.moneda)}</td>
-                      <td>{formatMoney(sale.impuestos, sale.moneda)}</td>
-                      <td>
-                        {resolveDiscountPercentage(sale.subtotal, sale.descuento).toFixed(2)}%
-                        {' / '}
-                        {formatMoney(sale.descuento, sale.moneda)}
-                      </td>
-                      <td>{formatMoney(sale.total, sale.moneda)}</td>
-                      <td>{sale.numeroComprobante ?? 'Sin comprobante'}</td>
-                      <td>{sale.observaciones ?? 'Sin observaciones'}</td>
-                      <td>
-                        <Tag $tone={sale.estado === 'ANULADA' ? 'off' : sale.estado === 'BORRADOR' ? 'warn' : 'ok'}>
-                          {sale.estado}
-                        </Tag>
-                      </td>
-                      <td>
-                        <ButtonsRow>
-                          <GhostButton
-                            type="button"
-                            onClick={() => handleStartEdit(sale)}
-                            disabled={isSubmitting || annulStatus === 'submitting' || sale.estado === 'ANULADA'}
-                          >
-                            Editar
-                          </GhostButton>
-                          <DangerButton
-                            type="button"
-                            onClick={() => handleAnnulSale(sale)}
-                            disabled={annulStatus === 'submitting' || sale.estado === 'ANULADA'}
-                          >
-                            {annulStatus === 'submitting' && annullingSaleId === sale.id
-                              ? 'Anulando...'
-                              : 'Anular'}
-                          </DangerButton>
-                        </ButtonsRow>
-                      </td>
+            <FilterBar>
+              <Field>
+                Buscar en historial
+                <InputControl
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                  placeholder="Busca sucursal, producto o comprobante"
+                />
+              </Field>
+              <Field>
+                Estado
+                <SelectControl
+                  value={filterEstado}
+                  onChange={(event) => setFilterEstado(event.target.value as typeof filterEstado)}
+                >
+                  <option value="TODAS">TODAS</option>
+                  <option value="BORRADOR">BORRADOR</option>
+                  <option value="CONFIRMADA">CONFIRMADA</option>
+                  <option value="ANULADA">ANULADA</option>
+                </SelectControl>
+              </Field>
+            </FilterBar>
+
+            {visibleSales.length === 0 ? (
+              <StatusState kind="empty" message="No hay ventas que coincidan con tus filtros." />
+            ) : (
+              <TableWrap>
+                <DataTable>
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Sucursal</th>
+                      <th>Producto</th>
+                      <th className="num">Cant.</th>
+                      <th className="hide-mobile">P. unit</th>
+                      <th className="hide-mobile">Subtotal</th>
+                      <th className="hide-mobile">Imp.</th>
+                      <th className="hide-mobile">Desc.</th>
+                      <th className="num">Total</th>
+                      <th className="hide-mobile">Comprobante</th>
+                      <th className="hide-mobile wrap">Observaciones</th>
+                      <th>Estado</th>
+                      <th className="actions">Acciones</th>
                     </tr>
-                  ))}
-                </tbody>
-              </DataTable>
-            </TableWrap>
-          )}
+                  </thead>
+                  <tbody>
+                    {visibleSales.map((sale) => (
+                      <tr key={sale.id}>
+                        <td>{formatDateTime(sale.fecha)}</td>
+                        <td>{sale.localNombre}</td>
+                        <td>{sale.productoNombre}</td>
+                        <td className="num">{sale.cantidad}</td>
+                        <td className="hide-mobile num">{formatMoney(sale.precioUnitario, sale.moneda)}</td>
+                        <td className="hide-mobile num">{formatMoney(sale.subtotal, sale.moneda)}</td>
+                        <td className="hide-mobile num">{formatMoney(sale.impuestos, sale.moneda)}</td>
+                        <td className="hide-mobile num">
+                          {resolveDiscountPercentage(sale.subtotal, sale.descuento).toFixed(2)}%
+                          {' / '}
+                          {formatMoney(sale.descuento, sale.moneda)}
+                        </td>
+                        <td className="num">{formatMoney(sale.total, sale.moneda)}</td>
+                        <td className="hide-mobile">{sale.numeroComprobante ?? 'Sin comprobante'}</td>
+                        <td className="hide-mobile wrap">{sale.observaciones ?? 'Sin observaciones'}</td>
+                        <td>
+                          <Tag $tone={sale.estado === 'ANULADA' ? 'off' : sale.estado === 'BORRADOR' ? 'warn' : 'ok'}>
+                            {sale.estado}
+                          </Tag>
+                        </td>
+                        <td className="actions">
+                          <TableActions>
+                            <GhostButton
+                              type="button"
+                              onClick={() => handleStartEdit(sale)}
+                              disabled={isSubmitting || annulStatus === 'submitting' || sale.estado === 'ANULADA'}
+                            >
+                              Editar
+                            </GhostButton>
+                            <DangerButton
+                              type="button"
+                              onClick={() => handleAnnulSale(sale)}
+                              disabled={annulStatus === 'submitting' || sale.estado === 'ANULADA'}
+                            >
+                              {annulStatus === 'submitting' && annullingSaleId === sale.id
+                                ? 'Anulando...'
+                                : 'Anular'}
+                            </DangerButton>
+                          </TableActions>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </DataTable>
+              </TableWrap>
+            )}
+          </HistoryPanel>
         </>
       )}
     </SectionCard>

@@ -23,20 +23,34 @@ const Layout = styled.main`
   display: grid;
   place-items: center;
   padding: 20px;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 20% 20%, rgba(28, 92, 70, 0.18) 0%, transparent 35%),
+      radial-gradient(circle at 90% 10%, rgba(210, 164, 110, 0.2) 0%, transparent 40%);
+    pointer-events: none;
+  }
 `;
 
 const Card = styled.section`
   width: min(460px, 100%);
-  border-radius: 18px;
-  border: 1px solid #d6e3df;
-  background: #ffffff;
-  box-shadow: 0 26px 50px rgba(14, 36, 28, 0.12);
-  padding: 24px;
+  border-radius: 22px;
+  border: 1px solid var(--border-soft);
+  background: linear-gradient(180deg, #ffffff 0%, #f7faf8 100%);
+  box-shadow: var(--shadow-soft);
+  padding: 26px;
+  position: relative;
+  z-index: 1;
 `;
 
 const Title = styled.h1`
   margin: 0;
-  font-size: 1.6rem;
+  font-size: 1.75rem;
 `;
 
 const Subtitle = styled.p`
@@ -58,10 +72,13 @@ const Input = styled.input`
   padding: 12px;
   outline: none;
   margin-bottom: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f6f9f8 100%);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 
   :focus {
     border-color: var(--accent-main);
-    box-shadow: 0 0 0 3px rgba(31, 122, 90, 0.18);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+    background: #fff;
   }
 `;
 
@@ -70,10 +87,17 @@ const Submit = styled.button`
   border: none;
   border-radius: 10px;
   padding: 12px 14px;
-  background: linear-gradient(115deg, #205f49 0%, #2d8664 100%);
+  background: linear-gradient(115deg, #1d5f4a 0%, #2b8a67 100%);
   color: #f8fffc;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 14px 24px rgba(20, 62, 48, 0.18);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  :hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 16px 28px rgba(20, 62, 48, 0.22);
+  }
 
   :disabled {
     cursor: not-allowed;
@@ -92,9 +116,9 @@ const ErrorBox = styled.div`
   border-radius: 10px;
   margin-bottom: 14px;
   padding: 10px 12px;
-  border: 1px solid #efc4c4;
-  background: #fff0f0;
-  color: #8c2e2e;
+  border: 1px solid #f1b6b6;
+  background: #fff1f1;
+  color: #7c2727;
 `;
 
 export function LoginScreen({
@@ -186,7 +210,7 @@ export function LoginScreen({
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             onFocus={onClearError}
-            placeholder="Correo@gmail.com"
+            placeholder="ejemplo@correo.com"
             required
           />
 
@@ -198,7 +222,7 @@ export function LoginScreen({
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             onFocus={onClearError}
-            placeholder="Tu clave segura"
+            placeholder="Clave segura"
             required
           />
 

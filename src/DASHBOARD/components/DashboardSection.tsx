@@ -34,8 +34,9 @@ const MetricsGrid = styled.div`
 const MetricCard = styled.article`
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
-  padding: 12px;
-  background: linear-gradient(135deg, #ffffff 0%, #f5fbf8 100%);
+  padding: 14px;
+  background: linear-gradient(135deg, #ffffff 0%, #f3faf7 100%);
+  box-shadow: 0 12px 22px rgba(14, 30, 24, 0.08);
 
   p {
     margin: 0;
@@ -64,8 +65,9 @@ const ChartsGrid = styled.section`
 const ChartCard = styled.article`
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
-  background: #fff;
-  padding: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbf9 100%);
+  padding: 14px;
+  box-shadow: 0 12px 22px rgba(14, 30, 24, 0.08);
 `;
 
 const ChartTitle = styled.h3`
@@ -95,7 +97,7 @@ const BarTrack = styled.div`
   width: 100%;
   height: 10px;
   border-radius: 999px;
-  background: #eef3f1;
+  background: #e7efe9;
   overflow: hidden;
 `;
 
@@ -103,6 +105,7 @@ const BarFill = styled.div<{ $ratio: number; $tone?: 'main' | 'warn' | 'muted' }
   width: ${({ $ratio }) => `${Math.max(4, Math.min(100, $ratio * 100))}%`};
   height: 100%;
   border-radius: 999px;
+  transition: width 0.3s ease;
   background: ${({ $tone }) => {
     if ($tone === 'warn') return 'linear-gradient(90deg, #ffbe7d 0%, #f08a2f 100%)';
     if ($tone === 'muted') return 'linear-gradient(90deg, #c7d3ce 0%, #94a7a0 100%)';
@@ -200,7 +203,7 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
         />
       )}
       {status === 'success' && sales.length === 0 && (
-        <StatusState kind="empty" message="Aun no hay ventas para construir estadisticas." />
+        <StatusState kind="empty" message="No hay ventas en este rango. Ajusta las fechas o registra nuevas ventas." />
       )}
 
       {status === 'success' && sales.length > 0 && (
@@ -281,16 +284,16 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
               <thead>
                 <tr>
                   <th>Fecha</th>
-                  <th>Ventas</th>
-                  <th>Total</th>
+                  <th className="num">Ventas</th>
+                  <th className="num">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {byDate.map((row) => (
                   <tr key={row.fecha}>
                     <td>{row.fecha}</td>
-                    <td>{row.ventas}</td>
-                    <td>{formatMoney(row.total)}</td>
+                    <td className="num">{row.ventas}</td>
+                    <td className="num">{formatMoney(row.total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -305,16 +308,16 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
               <thead>
                 <tr>
                   <th>Producto</th>
-                  <th>Unidades</th>
-                  <th>Total</th>
+                  <th className="num">Unidades</th>
+                  <th className="num">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {byProduct.map((row) => (
                   <tr key={row.nombre}>
                     <td>{row.nombre}</td>
-                    <td>{row.cantidad}</td>
-                    <td>{formatMoney(row.total)}</td>
+                    <td className="num">{row.cantidad}</td>
+                    <td className="num">{formatMoney(row.total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -329,16 +332,16 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
               <thead>
                 <tr>
                   <th>Sucursal</th>
-                  <th>Ventas</th>
-                  <th>Total</th>
+                  <th className="num">Ventas</th>
+                  <th className="num">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {byBranch.map((row) => (
                   <tr key={row.nombre}>
                     <td>{row.nombre}</td>
-                    <td>{row.ventas}</td>
-                    <td>{formatMoney(row.total)}</td>
+                    <td className="num">{row.ventas}</td>
+                    <td className="num">{formatMoney(row.total)}</td>
                   </tr>
                 ))}
               </tbody>

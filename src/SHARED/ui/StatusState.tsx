@@ -9,10 +9,10 @@ interface StatusStateProps {
 }
 
 const toneByKind: Record<StatusStateProps['kind'], { bg: string; border: string; text: string }> = {
-  loading: { bg: '#f4f7f6', border: '#d4dfda', text: '#24443a' },
-  error: { bg: '#fdecec', border: '#f2bcbc', text: '#7f2323' },
-  empty: { bg: '#f8f3ee', border: '#ecd8c3', text: '#6c4a2f' },
-  info: { bg: '#edf6ff', border: '#bdd8f5', text: '#20496f' },
+  loading: { bg: '#f2f6f4', border: '#d1ded8', text: '#1f3e34' },
+  error: { bg: '#fdecec', border: '#f1b6b6', text: '#7d2b2b' },
+  empty: { bg: '#f9f2ea', border: '#ead2b7', text: '#6b482a' },
+  info: { bg: '#eef5ff', border: '#c1d7f2', text: '#204465' },
 };
 
 const Box = styled.div<{ $kind: StatusStateProps['kind'] }>`
@@ -21,6 +21,8 @@ const Box = styled.div<{ $kind: StatusStateProps['kind'] }>`
   border: 1px solid ${({ $kind }) => toneByKind[$kind].border};
   background: ${({ $kind }) => toneByKind[$kind].bg};
   color: ${({ $kind }) => toneByKind[$kind].text};
+  box-shadow: 0 10px 22px rgba(18, 28, 24, 0.08);
+  line-height: 1.5;
 `;
 
 export function StatusState({ kind, message }: StatusStateProps) {

@@ -3,6 +3,7 @@
  * Permite crear sucursales con select dependiente: pais -> ciudad -> barrio/localidad.
  */
 import { FormEvent, useMemo, useState } from 'react';
+import styled from 'styled-components';
 import { getCityOptions, getCountryOptions, getLocalityOptions } from '../data/locationCatalog';
 import { formatDateTime } from '../../SHARED/utils/format';
 import { isSetupError, toFriendlySupabaseMessage } from '../../SHARED/utils/supabaseGuidance';
@@ -52,6 +53,40 @@ const EMPTY_FORM: CreateBranchInput = {
   estado: true,
 };
 
+const SummaryGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+`;
+
+const SummaryCard = styled.article`
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 18px rgba(12, 26, 20, 0.06);
+
+  p {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  strong {
+    display: block;
+    margin-top: 4px;
+    font-size: 1.05rem;
+  }
+`;
+
+const TableActions = styled.div.attrs({ className: 'no-wrap' })`
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+`;
+
 export function BranchesSection({
   branches,
   status,
@@ -84,6 +119,13 @@ export function BranchesSection({
     () => getLocalityOptions(form.pais, form.ciudad),
     [form.pais, form.ciudad],
   );
+  const summary = useMemo(() => {
+    const total = branches.length;
+    const active = branches.filter((branch) => branch.estado).length;
+    const inactive = total - active;
+    const withEmail = branches.filter((branch) => Boolean(branch.email)).length;
+    return { total, active, inactive, withEmail };
+  }, [branches]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -173,6 +215,25 @@ export function BranchesSection({
         <SectionMeta>{branches.length} registradas</SectionMeta>
       </SectionHeader>
 
+      <SummaryGrid>
+        <SummaryCard>
+          <p>Total registradas</p>
+          <strong>{summary.total}</strong>
+        </SummaryCard>
+        <SummaryCard>
+          <p>Activas</p>
+          <strong>{summary.active}</strong>
+        </SummaryCard>
+        <SummaryCard>
+          <p>Inactivas</p>
+          <strong>{summary.inactive}</strong>
+        </SummaryCard>
+        <SummaryCard>
+          <p>Con correo</p>
+          <strong>{summary.withEmail}</strong>
+        </SummaryCard>
+      </SummaryGrid>
+
       <FormGrid onSubmit={handleSubmit}>
         <Fields>
           <Field>
@@ -180,7 +241,7 @@ export function BranchesSection({
             <InputControl
               value={form.nit}
               onChange={(event) => setForm((prev) => ({ ...prev, nit: event.target.value }))}
-              placeholder="900123456-7"
+              placeholder="Ej: 900123456-7"
               required
             />
           </Field>
@@ -189,7 +250,7 @@ export function BranchesSection({
             <InputControl
               value={form.nombre}
               onChange={(event) => setForm((prev) => ({ ...prev, nombre: event.target.value }))}
-              placeholder="Sede Centro"
+              placeholder="Ej: Sede Centro"
               required
             />
           </Field>
@@ -255,7 +316,7 @@ export function BranchesSection({
             <InputControl
               value={form.telefono}
               onChange={(event) => setForm((prev) => ({ ...prev, telefono: event.target.value }))}
-              placeholder="+57 300 000 0000"
+              placeholder="Ej: +57 300 000 0000"
             />
           </Field>
           <Field>
@@ -264,7 +325,7 @@ export function BranchesSection({
               type="email"
               value={form.email}
               onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-              placeholder="sucursal@empresa.com"
+              placeholder="Ej: sucursal@empresa.com"
             />
           </Field>
           <Field>
@@ -272,7 +333,7 @@ export function BranchesSection({
             <InputControl
               value={form.direccion}
               onChange={(event) => setForm((prev) => ({ ...prev, direccion: event.target.value }))}
-              placeholder="Cra 10 # 20-30"
+              placeholder="Ej: Cra 10 # 20-30"
             />
           </Field>
           <Field>
@@ -339,7 +400,7 @@ export function BranchesSection({
         />
       )}
       {status === 'success' && branches.length === 0 && (
-        <StatusState kind="empty" message="Primero crea tu primera sucursal usando el formulario." />
+        <StatusState kind="empty" message="No hay sucursales registradas. Crea la primera con el formulario." />
       )}
 
       {status === 'success' && branches.length > 0 && (
@@ -347,38 +408,38 @@ export function BranchesSection({
           <DataTable>
             <thead>
               <tr>
-                <th>NIT</th>
+                <th className="hide-mobile">NIT</th>
                 <th>Sucursal</th>
-                <th>Pais</th>
+                <th className="hide-mobile">Pais</th>
                 <th>Ciudad</th>
-                <th>Barrio/Localidad</th>
-                <th>Direccion</th>
-                <th>Telefono</th>
-                <th>Email</th>
+                <th className="hide-mobile">Barrio/Localidad</th>
+                <th className="hide-mobile">Direccion</th>
+                <th className="hide-mobile">Telefono</th>
+                <th className="hide-mobile">Email</th>
                 <th>Estado</th>
-                <th>Creada</th>
-                <th>Acciones</th>
+                <th className="hide-mobile">Creada</th>
+                <th className="actions">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {branches.map((branch) => (
                 <tr key={branch.id}>
-                  <td>{branch.nit}</td>
+                  <td className="hide-mobile">{branch.nit}</td>
                   <td>{branch.nombre}</td>
-                  <td>{branch.pais}</td>
+                  <td className="hide-mobile">{branch.pais}</td>
                   <td>{branch.ciudad ?? 'Sin ciudad'}</td>
-                  <td>{branch.localidad ?? 'Sin localidad'}</td>
-                  <td>{branch.direccion ?? 'Sin direccion'}</td>
-                  <td>{branch.telefono ?? 'Sin telefono'}</td>
-                  <td>{branch.email ?? 'Sin email'}</td>
+                  <td className="hide-mobile">{branch.localidad ?? 'Sin localidad'}</td>
+                  <td className="hide-mobile">{branch.direccion ?? 'Sin direccion'}</td>
+                  <td className="hide-mobile">{branch.telefono ?? 'Sin telefono'}</td>
+                  <td className="hide-mobile">{branch.email ?? 'Sin email'}</td>
                   <td>
                     <Tag $tone={branch.estado ? 'ok' : 'off'}>
                       {branch.estado ? 'Activa' : 'Inactiva'}
                     </Tag>
                   </td>
-                  <td>{formatDateTime(branch.createdAt)}</td>
-                  <td>
-                    <ButtonsRow>
+                  <td className="hide-mobile">{formatDateTime(branch.createdAt)}</td>
+                  <td className="actions">
+                    <TableActions>
                       <GhostButton
                         type="button"
                         onClick={() => handleStartEditBranch(branch)}
@@ -395,7 +456,7 @@ export function BranchesSection({
                           ? 'Eliminando...'
                           : 'Eliminar'}
                       </DangerButton>
-                    </ButtonsRow>
+                    </TableActions>
                   </td>
                 </tr>
               ))}

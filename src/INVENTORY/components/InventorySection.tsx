@@ -3,6 +3,7 @@
  * Permite cargar stock inicial y visualizar disponibilidad de cada producto.
  */
 import { FormEvent, useMemo, useState } from 'react';
+import styled from 'styled-components';
 import type { Branch } from '../../BRANCHES/types/Branch';
 import { useProducts } from '../../PRODUCTS/hooks/useProducts';
 import { formatDateTime } from '../../SHARED/utils/format';
@@ -14,6 +15,7 @@ import {
   DangerButton,
   Divider,
   Field,
+  Fields,
   FormGrid,
   GhostButton,
   InputControl,
@@ -42,6 +44,106 @@ const EMPTY_FORM: InventoryForm = {
   currentQty: '',
   minQty: '',
 };
+
+const SummaryGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+`;
+
+const SummaryCard = styled.article`
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 18px rgba(12, 26, 20, 0.06);
+
+  p {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  strong {
+    display: block;
+    margin-top: 4px;
+    font-size: 1.05rem;
+  }
+`;
+
+const TableActions = styled.div`
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+`;
+
+const BranchPanel = styled.section`
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  background: linear-gradient(140deg, #ffffff 0%, #f2faf6 100%);
+  box-shadow: 0 12px 22px rgba(12, 26, 20, 0.08);
+`;
+
+const BranchPanelHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+`;
+
+const BranchPanelTitle = styled.p`
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+`;
+
+const BranchGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+
+  @media (max-width: 680px) {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(200px, 1fr);
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+`;
+
+const BranchCard = styled.button<{ $active?: boolean; $disabled?: boolean }>`
+  text-align: left;
+  border-radius: var(--radius-sm);
+  border: 1px solid ${({ $active }) => ($active ? '#7bc2a1' : 'var(--border-soft)')};
+  background: ${({ $active }) =>
+    $active ? 'linear-gradient(135deg, #e3f7ed 0%, #d6f1e2 100%)' : '#ffffff'};
+  padding: 10px 12px;
+  cursor: ${({ $disabled }) => ($disabled ? 'not-allowed' : 'pointer')};
+  color: var(--text-main);
+  opacity: ${({ $disabled }) => ($disabled ? 0.6 : 1)};
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+
+  :hover {
+    transform: ${({ $disabled }) => ($disabled ? 'none' : 'translateY(-1px)')};
+    box-shadow: ${({ $disabled }) => ($disabled ? 'none' : '0 10px 18px rgba(12, 26, 20, 0.08)')};
+  }
+
+  strong {
+    display: block;
+    font-size: 0.95rem;
+  }
+
+  span {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    margin-top: 2px;
+  }
+`;
 
 export function InventorySection({ branchId, branches, onBranchChange, refreshKey }: InventorySectionProps) {
   const { products } = useProducts(refreshKey);
@@ -91,6 +193,13 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
       ),
     [branches],
   );
+  const summary = useMemo(() => {
+    const total = inventory.length;
+    const lowStock = inventory.filter((item) => item.cantidadActual <= item.cantidadMinima).length;
+    const healthy = total - lowStock;
+    const movimientos = movements.length;
+    return { total, lowStock, healthy, movimientos };
+  }, [inventory, movements]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -179,60 +288,112 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
         <SectionMeta>
           {branchId && selectedBranchName
             ? `Sucursal activa: ${selectedBranchName}`
-            : 'Sin sucursal activa'}
+            : 'Sucursal no seleccionada'}
         </SectionMeta>
       </SectionHeader>
 
+      <SummaryGrid>
+        <SummaryCard>
+          <p>Items en inventario</p>
+          <strong>{summary.total}</strong>
+        </SummaryCard>
+        <SummaryCard>
+          <p>Stock estable</p>
+          <strong>{summary.healthy}</strong>
+        </SummaryCard>
+        <SummaryCard>
+          <p>Bajo stock</p>
+          <strong>{summary.lowStock}</strong>
+        </SummaryCard>
+        <SummaryCard>
+          <p>Movimientos</p>
+          <strong>{summary.movimientos}</strong>
+        </SummaryCard>
+      </SummaryGrid>
+
+      <BranchPanel>
+        <BranchPanelHeader>
+          <BranchPanelTitle>Sucursales disponibles</BranchPanelTitle>
+          <SectionMeta>
+            {branchOptions.length} activas · {branchId ? 'Sucursal seleccionada' : 'Sin seleccion'}
+          </SectionMeta>
+        </BranchPanelHeader>
+        <BranchGrid>
+          {branches.map((branch) => {
+            const isActive = branch.id === branchId;
+            return (
+              <BranchCard
+                key={branch.id}
+                type="button"
+                $active={isActive}
+                $disabled={!branch.estado}
+                onClick={() => {
+                  if (!branch.estado) return;
+                  onBranchChange(branch.id);
+                }}
+              >
+                <strong>{branch.nombre}</strong>
+                <span>{branch.ciudad ?? 'Ciudad sin definir'}</span>
+                <span>{branch.localidad ?? 'Localidad sin definir'}</span>
+                <Tag $tone={branch.estado ? 'ok' : 'off'}>{branch.estado ? 'Activa' : 'Inactiva'}</Tag>
+              </BranchCard>
+            );
+          })}
+        </BranchGrid>
+      </BranchPanel>
+
       <FormGrid onSubmit={handleSubmit}>
-        <Field>
-          Sucursal
-          <SelectControl value={branchId} onChange={(event) => onBranchChange(event.target.value)}>
-            <option value="">Selecciona una sucursal</option>
-            {branchOptions.map((branch) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </SelectControl>
-        </Field>
+        <Fields>
+          <Field>
+            Sucursal
+            <SelectControl value={branchId} onChange={(event) => onBranchChange(event.target.value)}>
+              <option value="">Selecciona una sucursal</option>
+              {branchOptions.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name}
+                </option>
+              ))}
+            </SelectControl>
+          </Field>
 
-        <Field>
-          Producto
-          <SelectControl
-            value={form.productId}
-            onChange={(event) => setForm((prev) => ({ ...prev, productId: event.target.value }))}
-            disabled={Boolean(editingInventoryId)}
-          >
-            <option value="">Selecciona un producto</option>
-            {productOptions.map((product) => (
-              <option key={product.id} value={product.id}>
-                {product.name}
-              </option>
-            ))}
-          </SelectControl>
-        </Field>
+          <Field>
+            Producto
+            <SelectControl
+              value={form.productId}
+              onChange={(event) => setForm((prev) => ({ ...prev, productId: event.target.value }))}
+              disabled={Boolean(editingInventoryId)}
+            >
+              <option value="">Selecciona un producto</option>
+              {productOptions.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name}
+                </option>
+              ))}
+            </SelectControl>
+          </Field>
 
-        <Field>
-          Cantidad disponible
-          <InputControl
-            inputMode="decimal"
-            value={form.currentQty}
-            onChange={(event) => setForm((prev) => ({ ...prev, currentQty: event.target.value }))}
-            placeholder="100"
-            required
-          />
-        </Field>
+          <Field>
+            Cantidad disponible
+            <InputControl
+              inputMode="decimal"
+              value={form.currentQty}
+              onChange={(event) => setForm((prev) => ({ ...prev, currentQty: event.target.value }))}
+              placeholder="Ej: 100"
+              required
+            />
+          </Field>
 
-        <Field>
-          Cantidad minima recomendada
-          <InputControl
-            inputMode="decimal"
-            value={form.minQty}
-            onChange={(event) => setForm((prev) => ({ ...prev, minQty: event.target.value }))}
-            placeholder="10"
-            required
-          />
-        </Field>
+          <Field>
+            Cantidad minima recomendada
+            <InputControl
+              inputMode="decimal"
+              value={form.minQty}
+              onChange={(event) => setForm((prev) => ({ ...prev, minQty: event.target.value }))}
+              placeholder="Ej: 10"
+              required
+            />
+          </Field>
+        </Fields>
 
         {(formError || friendlySaveError) && (
           <StatusState
@@ -269,7 +430,7 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
 
       <Divider />
 
-      {!branchId && <StatusState kind="info" message="Primero selecciona o crea una sucursal." />}
+      {!branchId && <StatusState kind="info" message="Selecciona una sucursal para ver su inventario." />}
       {branchId && status === 'loading' && <StatusState kind="loading" message="Cargando inventario..." />}
       {branchId && status === 'error' && (
         <StatusState
@@ -280,7 +441,7 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
       {branchId && status === 'success' && inventory.length === 0 && (
         <StatusState
           kind="empty"
-          message="Primero crea productos y luego carga las existencias iniciales."
+          message="No hay inventario cargado para esta sucursal. Registra las existencias iniciales."
         />
       )}
 
@@ -290,12 +451,12 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
             <thead>
               <tr>
                 <th>Producto</th>
-                <th>Codigo</th>
-                <th>Disponible</th>
-                <th>Minimo</th>
+                <th className="hide-mobile">Codigo</th>
+                <th className="num">Disponible</th>
+                <th className="num">Minimo</th>
                 <th>Estado</th>
-                <th>Actualizado</th>
-                <th>Acciones</th>
+                <th className="hide-mobile">Actualizado</th>
+                <th className="actions">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -304,15 +465,15 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
                 return (
                   <tr key={item.id}>
                     <td>{item.productoNombre}</td>
-                    <td>{item.codigoBarra ?? 'Sin codigo'}</td>
-                    <td>{item.cantidadActual}</td>
-                    <td>{item.cantidadMinima}</td>
+                    <td className="hide-mobile">{item.codigoBarra ?? 'Sin codigo'}</td>
+                    <td className="num">{item.cantidadActual}</td>
+                    <td className="num">{item.cantidadMinima}</td>
                     <td>
                       <Tag $tone={lowStock ? 'warn' : 'ok'}>{lowStock ? 'Bajo' : 'Estable'}</Tag>
                     </td>
-                    <td>{formatDateTime(item.updatedAt)}</td>
-                    <td>
-                      <ButtonsRow>
+                    <td className="hide-mobile">{formatDateTime(item.updatedAt)}</td>
+                    <td className="actions">
+                      <TableActions>
                         <GhostButton
                           type="button"
                           onClick={() =>
@@ -343,7 +504,7 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
                             ? 'Eliminando...'
                             : 'Eliminar'}
                         </DangerButton>
-                      </ButtonsRow>
+                      </TableActions>
                     </td>
                   </tr>
                 );
@@ -362,7 +523,7 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
           </SectionHeader>
 
           {movements.length === 0 && (
-            <StatusState kind="empty" message="Aun no hay movimientos para esta sucursal." />
+            <StatusState kind="empty" message="Sin movimientos para esta sucursal por ahora." />
           )}
 
           {movements.length > 0 && (
@@ -371,11 +532,11 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
                 <thead>
                   <tr>
                     <th>Fecha</th>
-                    <th>Sucursal</th>
+                    <th className="hide-mobile">Sucursal</th>
                     <th>Producto</th>
                     <th>Tipo</th>
-                    <th>Cantidad</th>
-                    <th>Motivo</th>
+                    <th className="num">Cantidad</th>
+                    <th className="hide-mobile">Motivo</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -389,13 +550,13 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
                     return (
                       <tr key={movement.id}>
                         <td>{formatDateTime(movement.fecha)}</td>
-                        <td>{branchesById.get(movement.sucursalId) ?? 'Sucursal no encontrada'}</td>
+                        <td className="hide-mobile">{branchesById.get(movement.sucursalId) ?? 'Sucursal no encontrada'}</td>
                         <td>{movement.productoNombre}</td>
                         <td>
                           <Tag $tone={tone}>{movement.tipoMovimiento}</Tag>
                         </td>
-                        <td>{movement.cantidad}</td>
-                        <td>{movement.motivo ?? 'Sin motivo'}</td>
+                        <td className="num">{movement.cantidad}</td>
+                        <td className="hide-mobile">{movement.motivo ?? 'Sin motivo'}</td>
                       </tr>
                     );
                   })}

@@ -5,24 +5,48 @@
 import styled from 'styled-components';
 
 export const Page = styled.main`
-  max-width: 1180px;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 28px 18px 40px;
+  padding: 32px 20px 56px;
+  display: grid;
+  gap: 16px;
 
   @media (max-width: 640px) {
-    padding: 20px 12px 28px;
+    padding: 20px 12px 32px;
   }
 `;
 
 export const Header = styled.header`
-  padding: 24px;
-  border-radius: 20px;
+  padding: 26px;
+  border-radius: 24px;
   color: #f3fff8;
   background:
-    radial-gradient(circle at 78% 0%, rgba(248, 223, 188, 0.22) 0%, transparent 44%),
-    linear-gradient(122deg, #173f31 0%, #1d6b4f 54%, #30946d 100%);
-  box-shadow: 0 26px 54px rgba(11, 40, 30, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.24);
+    radial-gradient(circle at 75% 5%, rgba(245, 211, 171, 0.32) 0%, transparent 48%),
+    linear-gradient(135deg, #133329 0%, #1d5f4c 52%, #2f8a6b 100%);
+  box-shadow: var(--shadow-soft);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  position: relative;
+  overflow: hidden;
+  animation: riseIn 0.4s ease;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.18) 0%, transparent 30%),
+      radial-gradient(circle at 100% 85%, rgba(255, 255, 255, 0.12) 0%, transparent 35%);
+    pointer-events: none;
+  }
+
+  > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  @media (max-width: 640px) {
+    padding: 20px;
+  }
 `;
 
 export const Brand = styled.p`
@@ -31,25 +55,25 @@ export const Brand = styled.p`
   font-weight: 700;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
 `;
 
 export const HeaderTitle = styled.h1`
   margin: 4px 0 8px;
-  font-size: 1.82rem;
+  font-size: clamp(1.6rem, 2.5vw, 2.3rem);
 `;
 
 export const HeaderCopy = styled.p`
   margin: 0;
   color: #d8f8ea;
-  max-width: 650px;
+  max-width: 720px;
 `;
 
 export const Toolbar = styled.div`
-  margin-top: 14px;
+  margin-top: 18px;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 `;
 
 export const UserPill = styled.span`
@@ -58,6 +82,7 @@ export const UserPill = styled.span`
   background: rgba(255, 255, 255, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.3);
   font-size: 0.85rem;
+  backdrop-filter: blur(8px);
 `;
 
 export const ActionButton = styled.button`
@@ -68,6 +93,13 @@ export const ActionButton = styled.button`
   padding: 8px 12px;
   font-weight: 700;
   cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+
+  :hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 18px rgba(8, 28, 22, 0.18);
+    background: rgba(255, 255, 255, 0.2);
+  }
 
   :disabled {
     cursor: not-allowed;
@@ -77,11 +109,11 @@ export const ActionButton = styled.button`
 
 export const AlertStrip = styled.div`
   margin-top: 14px;
-  border-radius: 10px;
-  border: 1px solid #f1d2b2;
-  background: #fff4e8;
+  border-radius: 12px;
+  border: 1px solid #f1d6ba;
+  background: #fff3e6;
   color: #6e4220;
-  padding: 12px;
+  padding: 12px 14px;
 `;
 
 export const Grid = styled.section`
@@ -111,11 +143,15 @@ export const ShellLayout = styled.section`
 export const SideMenu = styled.aside`
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-soft);
-  background: var(--bg-panel);
-  box-shadow: var(--shadow-soft);
+  background: linear-gradient(180deg, #ffffff 0%, #f7faf8 100%);
+  box-shadow: var(--shadow-lift);
   padding: 12px;
   position: sticky;
-  top: 14px;
+  top: 18px;
+
+  @media (max-width: 980px) {
+    position: static;
+  }
 `;
 
 export const SideMenuTitle = styled.p`
@@ -129,7 +165,14 @@ export const SideMenuTitle = styled.p`
 
 export const SideMenuList = styled.div`
   display: grid;
-  gap: 6px;
+  gap: 8px;
+
+  @media (max-width: 720px) {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(180px, 1fr);
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
 `;
 
 export const SideMenuButton = styled.button<{ $active?: boolean }>`
@@ -137,10 +180,18 @@ export const SideMenuButton = styled.button<{ $active?: boolean }>`
   text-align: left;
   border-radius: 10px;
   border: 1px solid ${({ $active }) => ($active ? '#7bc2a1' : 'var(--border-soft)')};
-  background: ${({ $active }) => ($active ? 'linear-gradient(125deg, #e7f7ef 0%, #d8f2e4 100%)' : '#fff')};
+  background: ${({ $active }) =>
+    $active ? 'linear-gradient(125deg, #e6f7ee 0%, #d4f1e2 100%)' : 'rgba(255, 255, 255, 0.96)'};
   color: ${({ $active }) => ($active ? '#154432' : 'var(--text-main)')};
   padding: 10px;
   cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+
+  :hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 16px rgba(15, 32, 26, 0.08);
+    border-color: ${({ $active }) => ($active ? '#6bb894' : '#cfe0d9')};
+  }
 
   strong {
     display: block;
@@ -155,4 +206,6 @@ export const SideMenuButton = styled.button<{ $active?: boolean }>`
 
 export const MainContent = styled.section`
   min-width: 0;
+  display: grid;
+  gap: 14px;
 `;
