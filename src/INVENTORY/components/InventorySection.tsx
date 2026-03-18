@@ -619,6 +619,8 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
                         <th>Producto</th>
                         <th>Tipo</th>
                         <th className="num">Cantidad</th>
+                        <th className="hide-mobile">Origen</th>
+                        <th className="hide-mobile">Referencia</th>
                         <th className="hide-mobile">Motivo</th>
                       </tr>
                     </thead>
@@ -641,6 +643,8 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
                               <Tag $tone={tone}>{movement.tipoMovimiento}</Tag>
                             </td>
                             <td className="num">{movement.cantidad}</td>
+                            <td className="hide-mobile">{movement.origenTipo ?? 'MANUAL'}</td>
+                            <td className="hide-mobile">{movement.origenId ?? '-'}</td>
                             <td className="hide-mobile">{movement.motivo ?? 'Sin motivo'}</td>
                           </tr>
                         );

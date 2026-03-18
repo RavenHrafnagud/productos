@@ -24,6 +24,8 @@ export interface InventoryMovement {
   cantidad: number;
   fecha: string;
   motivo: string | null;
+  origenTipo: string | null;
+  origenId: string | null;
 }
 
 /**

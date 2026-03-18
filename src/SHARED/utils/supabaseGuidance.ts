@@ -50,12 +50,20 @@ export function toFriendlySupabaseMessage(
     return 'La columna total es generada por la base de datos. El formulario de ventas debe registrar subtotal, impuestos y descuento para que el total se calcule automaticamente.';
   }
 
+  if (/stock insuficiente/i.test(rawError)) {
+    return 'No hay stock suficiente para completar la operacion. Revisa inventario, envios pendientes y movimientos.';
+  }
+
   if (/create_identity_user_account/i.test(rawError)) {
     return 'Falta la funcion de alta completa de usuarios. Ejecuta database/014_create_identity_user_with_auth.sql en Supabase.';
   }
 
   if (/delete_identity_user_account/i.test(rawError)) {
     return 'Falta la funcion para eliminar usuarios. Ejecuta database/021_delete_identity_user_account.sql en Supabase.';
+  }
+
+  if (/sync_inventory_from_sale|sync_inventory_from_envio|apply_inventory_delta/i.test(rawError)) {
+    return 'Falta la trazabilidad automatica de inventario. Ejecuta database/026_traceability_sales_shipments.sql en Supabase.';
   }
 
   if (/list_identity_users|list_identity_roles|create_identity_role|get_identity_context|complete_identity_user_profile|assign_identity_role_to_user|sync_identity_session_link|get_identity_admin_snapshot|update_identity_user_profile|update_identity_user_password/i.test(rawError)) {

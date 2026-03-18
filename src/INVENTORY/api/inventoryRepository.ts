@@ -90,6 +90,8 @@ type MovementRow = {
   cantidad: number | string;
   fecha: string;
   motivo: string | null;
+  origen_tipo?: string | null;
+  origen_id?: string | null;
 };
 
 export async function listMovementsByBranch(branchId: string): Promise<InventoryMovement[]> {
@@ -122,6 +124,8 @@ export async function listMovementsByBranch(branchId: string): Promise<Inventory
           cantidad: toNumber(row.cantidad),
           fecha: row.fecha,
           motivo: row.motivo,
+          origenTipo: row.origen_tipo ?? null,
+          origenId: row.origen_id ?? null,
         };
       });
     }

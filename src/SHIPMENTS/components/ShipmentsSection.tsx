@@ -192,6 +192,7 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
     const gananciaNeta = ingresoBruto - comisionValor - costoEnvio;
     return { costoEnvio, comision, ingresoBruto, comisionValor, gananciaNeta };
   }, [form.cantidad, form.comisionPorcentaje, form.costoEnvio, form.precioUnitario]);
+  const isStoreDestination = form.tipoDestino === 'TIENDA' || form.tipoDestino === 'LOCAL';
 
   const filteredShipments = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -241,7 +242,7 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
   const handleChangeDestination = (nextType: ShipmentDestinationType) => {
     setForm((prev) => {
       const mustUseStore = nextType === 'TIENDA' || nextType === 'LOCAL';
-      const nextBranchId = mustUseStore ? prev.localId : '';
+      const nextBranchId = prev.localId;
       const branchCommission = nextBranchId ? branchById.get(nextBranchId)?.porcentajeComision ?? 0 : 0;
       return {
         ...prev,
@@ -297,18 +298,18 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
       setFormError('La comision debe estar entre 0 y 100.');
       return;
     }
-    if (mustUseStore && !form.localId) {
-      setFormError('Para envios a tienda/local debes seleccionar una sucursal.');
+    if (!form.localId) {
+      setFormError('Debes seleccionar una sucursal para mantener la trazabilidad del inventario.');
       return;
     }
 
     try {
       await addShipment({
-        localId: mustUseStore ? form.localId : null,
+        localId: form.localId,
         productoId: form.productoId,
         destinatario,
         tipoDestino: form.tipoDestino,
-        canalVenta: form.tipoDestino === 'TIENDA' ? 'TIENDA' : 'DIRECTO',
+        canalVenta: form.tipoDestino === 'TIENDA' || form.tipoDestino === 'LOCAL' ? 'TIENDA' : 'DIRECTO',
         cantidad,
         precioUnitario,
         costoEnvio,
@@ -402,16 +403,13 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
                 </SelectControl>
               </Field>
               <Field>
-                Sucursal (si aplica)
+                {isStoreDestination ? 'Sucursal destino' : 'Sucursal origen'}
                 <SelectControl
                   value={form.localId}
                   onChange={(event) => handleBranchChange(event.target.value)}
-                  disabled={!(form.tipoDestino === 'TIENDA' || form.tipoDestino === 'LOCAL')}
                 >
                   <option value="">
-                    {form.tipoDestino === 'TIENDA' || form.tipoDestino === 'LOCAL'
-                      ? 'Selecciona sucursal'
-                      : 'No aplica para envio directo'}
+                    {isStoreDestination ? 'Selecciona sucursal destino' : 'Selecciona sucursal origen'}
                   </option>
                   {activeBranchOptions.map((branch) => (
                     <option key={branch.id} value={branch.id}>
@@ -476,7 +474,7 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
                 <InputControl
                   inputMode="decimal"
                   value={form.comisionPorcentaje}
-                  readOnly={form.tipoDestino === 'TIENDA' || form.tipoDestino === 'LOCAL'}
+                  readOnly={isStoreDestination}
                   onChange={(event) => setForm((prev) => ({ ...prev, comisionPorcentaje: event.target.value }))}
                   placeholder="Ej: 25"
                   required
@@ -701,4 +699,3 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
     </SectionCard>
   );
 }
-
