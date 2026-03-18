@@ -4,8 +4,8 @@
  */
 import { FormEvent, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Country } from 'country-state-city';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
+import { getCountryOptions as getGeoCountryOptions } from '../../SHARED/constants/geo';
 import {
   ButtonsRow,
   DangerButton,
@@ -19,7 +19,14 @@ import {
   SelectControl,
   TextAreaControl,
 } from '../../SHARED/ui/FormControls';
-import { SectionCard, SectionHeader, SectionMeta, SectionTitle } from '../../SHARED/ui/SectionCard';
+import {
+  SectionCard,
+  SectionHeader,
+  SectionHeaderActions,
+  SectionMeta,
+  SectionTitle,
+  SectionToggle,
+} from '../../SHARED/ui/SectionCard';
 import { StatusState } from '../../SHARED/ui/StatusState';
 import { isSetupError, toFriendlySupabaseMessage } from '../../SHARED/utils/supabaseGuidance';
 import { isStrongPassword, isValidEmail, sanitizeText } from '../../SHARED/utils/validators';
@@ -79,20 +86,32 @@ const SummaryGrid = styled.div`
 const SummaryCard = styled.article`
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 10px 18px rgba(12, 26, 20, 0.06);
 
   p {
     margin: 0;
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     color: var(--text-muted);
   }
 
   strong {
     display: block;
     margin-top: 4px;
-    font-size: 1.05rem;
+    font-size: 0.98rem;
+  }
+
+  @media (max-width: 520px) {
+    padding: 7px 9px;
+
+    p {
+      font-size: 0.72rem;
+    }
+
+    strong {
+      font-size: 0.92rem;
+    }
   }
 `;
 
@@ -162,6 +181,7 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [roleDraftByUser, setRoleDraftByUser] = useState<Record<string, string>>({});
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   const friendlyLoadError = toFriendlySupabaseMessage(error, 'usuarios');
   const friendlyCreateUserError = toFriendlySupabaseMessage(createUserError, 'usuarios');
   const friendlyCreateRoleError = toFriendlySupabaseMessage(createRoleError, 'usuarios');
@@ -183,10 +203,10 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
   }, [pendingUsers.length, roles.length, users]);
   const countryOptions = useMemo(
     () =>
-      Country.getAllCountries()
+      getGeoCountryOptions()
         .map((country) => ({
-          code: country.isoCode,
-          label: `${country.name} (${country.isoCode})`,
+          code: country.value,
+          label: `${country.label} (${country.value})`,
         }))
         .sort((a, b) => a.label.localeCompare(b.label)),
     [],
@@ -370,27 +390,33 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
     <SectionCard>
       <SectionHeader>
         <SectionTitle>Usuarios y roles</SectionTitle>
-        <SectionMeta>{users.length} cuentas detectadas</SectionMeta>
+        <SectionHeaderActions>
+          <SectionMeta>{users.length} cuentas detectadas</SectionMeta>
+          <SectionToggle type="button" onClick={() => setCollapsed((prev) => !prev)} aria-expanded={!collapsed}>
+            {collapsed ? 'Mostrar' : 'Ocultar'}
+          </SectionToggle>
+        </SectionHeaderActions>
       </SectionHeader>
-
-      <SummaryGrid>
-        <SummaryCard>
-          <p>Total de cuentas</p>
-          <strong>{summary.total}</strong>
-        </SummaryCard>
-        <SummaryCard>
-          <p>Usuarios activos</p>
-          <strong>{summary.active}</strong>
-        </SummaryCard>
-        <SummaryCard>
-          <p>Perfiles pendientes</p>
-          <strong>{summary.pending}</strong>
-        </SummaryCard>
-        <SummaryCard>
-          <p>Roles disponibles</p>
-          <strong>{summary.rolesCount}</strong>
-        </SummaryCard>
-      </SummaryGrid>
+      {!collapsed && (
+        <>
+          <SummaryGrid>
+            <SummaryCard>
+              <p>Total de cuentas</p>
+              <strong>{summary.total}</strong>
+            </SummaryCard>
+            <SummaryCard>
+              <p>Usuarios activos</p>
+              <strong>{summary.active}</strong>
+            </SummaryCard>
+            <SummaryCard>
+              <p>Perfiles pendientes</p>
+              <strong>{summary.pending}</strong>
+            </SummaryCard>
+            <SummaryCard>
+              <p>Roles disponibles</p>
+              <strong>{summary.rolesCount}</strong>
+            </SummaryCard>
+          </SummaryGrid>
 
       {profile ? (
         <StatusState
@@ -785,6 +811,8 @@ export function UsersSection({ authUserId, refreshKey }: UsersSectionProps) {
             </tbody>
           </DataTable>
         </TableWrap>
+      )}
+        </>
       )}
     </SectionCard>
   );

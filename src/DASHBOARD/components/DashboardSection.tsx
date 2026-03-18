@@ -6,7 +6,14 @@ import { useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { DataTable, TableWrap } from '../../SHARED/ui/DataTable';
 import { Field, Fields, InputControl } from '../../SHARED/ui/FormControls';
-import { SectionCard, SectionHeader, SectionMeta, SectionTitle } from '../../SHARED/ui/SectionCard';
+import {
+  SectionCard,
+  SectionHeader,
+  SectionHeaderActions,
+  SectionMeta,
+  SectionTitle,
+  SectionToggle,
+} from '../../SHARED/ui/SectionCard';
 import { StatusState } from '../../SHARED/ui/StatusState';
 import { formatMoney } from '../../SHARED/utils/format';
 import { isSetupError, toFriendlySupabaseMessage } from '../../SHARED/utils/supabaseGuidance';
@@ -35,8 +42,8 @@ const MetricCard = styled.article`
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
   padding: 14px;
-  background: linear-gradient(135deg, #ffffff 0%, #f3faf7 100%);
-  box-shadow: 0 12px 22px rgba(14, 30, 24, 0.08);
+  background: linear-gradient(135deg, #ffffff 0%, #f6f0ff 100%);
+  box-shadow: 0 12px 22px rgba(37, 24, 62, 0.1);
 
   p {
     margin: 0;
@@ -65,9 +72,9 @@ const ChartsGrid = styled.section`
 const ChartCard = styled.article`
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbf9 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #faf7ff 100%);
   padding: 14px;
-  box-shadow: 0 12px 22px rgba(14, 30, 24, 0.08);
+  box-shadow: 0 12px 22px rgba(37, 24, 62, 0.1);
 `;
 
 const ChartTitle = styled.h3`
@@ -97,7 +104,7 @@ const BarTrack = styled.div`
   width: 100%;
   height: 10px;
   border-radius: 999px;
-  background: #e7efe9;
+  background: #ece4fa;
   overflow: hidden;
 `;
 
@@ -108,8 +115,8 @@ const BarFill = styled.div<{ $ratio: number; $tone?: 'main' | 'warn' | 'muted' }
   transition: width 0.3s ease;
   background: ${({ $tone }) => {
     if ($tone === 'warn') return 'linear-gradient(90deg, #ffbe7d 0%, #f08a2f 100%)';
-    if ($tone === 'muted') return 'linear-gradient(90deg, #c7d3ce 0%, #94a7a0 100%)';
-    return 'linear-gradient(90deg, #59c08f 0%, #1f7a5a 100%)';
+    if ($tone === 'muted') return 'linear-gradient(90deg, #d8c8f1 0%, #a68ccf 100%)';
+    return 'linear-gradient(90deg, #a06ced 0%, #6a3fba 100%)';
   }};
 `;
 
@@ -118,6 +125,7 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
   const friendlyLoadError = toFriendlySupabaseMessage(error, 'dashboard');
   const [fromDate, setFromDate] = useState(() => toDateInputValue(new Date(Date.now() - 1000 * 60 * 60 * 24 * 30)));
   const [toDate, setToDate] = useState(() => toDateInputValue(new Date()));
+  const [collapsed, setCollapsed] = useState(false);
 
   const filteredSales = useMemo(() => {
     const fromTs = new Date(`${fromDate}T00:00:00`).getTime();
@@ -181,172 +189,181 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
     <SectionCard>
       <SectionHeader>
         <SectionTitle>Dashboard de ventas</SectionTitle>
-        <SectionMeta>{filteredSales.length} ventas en el rango</SectionMeta>
+        <SectionHeaderActions>
+          <SectionMeta>{filteredSales.length} ventas en el rango</SectionMeta>
+          <SectionToggle type="button" onClick={() => setCollapsed((prev) => !prev)} aria-expanded={!collapsed}>
+            {collapsed ? 'Mostrar' : 'Ocultar'}
+          </SectionToggle>
+        </SectionHeaderActions>
       </SectionHeader>
 
-      <Fields>
-        <Field>
-          Desde
-          <InputControl type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
-        </Field>
-        <Field>
-          Hasta
-          <InputControl type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
-        </Field>
-      </Fields>
-
-      {status === 'loading' && <StatusState kind="loading" message="Calculando estadisticas..." />}
-      {status === 'error' && (
-        <StatusState
-          kind={isSetupError(error) ? 'info' : 'error'}
-          message={friendlyLoadError ?? 'Error inesperado.'}
-        />
-      )}
-      {status === 'success' && sales.length === 0 && (
-        <StatusState kind="empty" message="No hay ventas en este rango. Ajusta las fechas o registra nuevas ventas." />
-      )}
-
-      {status === 'success' && sales.length > 0 && (
+      {!collapsed && (
         <>
-          <MetricsGrid>
-            <MetricCard>
-              <p>Ingresos totales</p>
-              <strong>{formatMoney(totals.totalIngresos)}</strong>
-            </MetricCard>
-            <MetricCard>
-              <p>Unidades vendidas</p>
-              <strong>{totals.totalUnidades}</strong>
-            </MetricCard>
-            <MetricCard>
-              <p>Ticket promedio</p>
-              <strong>{formatMoney(totals.ticketPromedio)}</strong>
-            </MetricCard>
-          </MetricsGrid>
+          <Fields>
+            <Field>
+              Desde
+              <InputControl type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
+            </Field>
+            <Field>
+              Hasta
+              <InputControl type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+            </Field>
+          </Fields>
 
-          <ChartsGrid>
-            <ChartCard>
-              <ChartTitle>Comportamiento por fecha</ChartTitle>
-              <Bars>
-                {byDate.slice(0, 10).map((row) => (
-                  <BarItem key={row.fecha}>
-                    <BarLabel>
-                      <span>{row.fecha}</span>
-                      <strong>{formatMoney(row.total)}</strong>
-                    </BarLabel>
-                    <BarTrack>
-                      <BarFill $ratio={row.total / maxByDate} />
-                    </BarTrack>
-                  </BarItem>
-                ))}
-              </Bars>
-            </ChartCard>
+          {status === 'loading' && <StatusState kind="loading" message="Calculando estadisticas..." />}
+          {status === 'error' && (
+            <StatusState
+              kind={isSetupError(error) ? 'info' : 'error'}
+              message={friendlyLoadError ?? 'Error inesperado.'}
+            />
+          )}
+          {status === 'success' && sales.length === 0 && (
+            <StatusState kind="empty" message="No hay ventas en este rango. Ajusta las fechas o registra nuevas ventas." />
+          )}
 
-            <ChartCard>
-              <ChartTitle>Top productos por ingresos</ChartTitle>
-              <Bars>
-                {byProduct.slice(0, 8).map((row) => (
-                  <BarItem key={row.nombre}>
-                    <BarLabel>
-                      <span>{row.nombre}</span>
-                      <strong>{formatMoney(row.total)}</strong>
-                    </BarLabel>
-                    <BarTrack>
-                      <BarFill $ratio={row.total / maxByProduct} $tone="warn" />
-                    </BarTrack>
-                  </BarItem>
-                ))}
-              </Bars>
-            </ChartCard>
+          {status === 'success' && sales.length > 0 && (
+            <>
+              <MetricsGrid>
+                <MetricCard>
+                  <p>Ingresos totales</p>
+                  <strong>{formatMoney(totals.totalIngresos)}</strong>
+                </MetricCard>
+                <MetricCard>
+                  <p>Unidades vendidas</p>
+                  <strong>{totals.totalUnidades}</strong>
+                </MetricCard>
+                <MetricCard>
+                  <p>Ticket promedio</p>
+                  <strong>{formatMoney(totals.ticketPromedio)}</strong>
+                </MetricCard>
+              </MetricsGrid>
 
-            <ChartCard>
-              <ChartTitle>Top sucursales por ingresos</ChartTitle>
-              <Bars>
-                {byBranch.slice(0, 8).map((row) => (
-                  <BarItem key={row.nombre}>
-                    <BarLabel>
-                      <span>{row.nombre}</span>
-                      <strong>{formatMoney(row.total)}</strong>
-                    </BarLabel>
-                    <BarTrack>
-                      <BarFill $ratio={row.total / maxByBranch} $tone="muted" />
-                    </BarTrack>
-                  </BarItem>
-                ))}
-              </Bars>
-            </ChartCard>
-          </ChartsGrid>
+              <ChartsGrid>
+                <ChartCard>
+                  <ChartTitle>Comportamiento por fecha</ChartTitle>
+                  <Bars>
+                    {byDate.slice(0, 10).map((row) => (
+                      <BarItem key={row.fecha}>
+                        <BarLabel>
+                          <span>{row.fecha}</span>
+                          <strong>{formatMoney(row.total)}</strong>
+                        </BarLabel>
+                        <BarTrack>
+                          <BarFill $ratio={row.total / maxByDate} />
+                        </BarTrack>
+                      </BarItem>
+                    ))}
+                  </Bars>
+                </ChartCard>
 
-          <SectionHeader>
-            <SectionTitle>Detalle por fecha</SectionTitle>
-          </SectionHeader>
-          <TableWrap>
-            <DataTable>
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th className="num">Ventas</th>
-                  <th className="num">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {byDate.map((row) => (
-                  <tr key={row.fecha}>
-                    <td>{row.fecha}</td>
-                    <td className="num">{row.ventas}</td>
-                    <td className="num">{formatMoney(row.total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </DataTable>
-          </TableWrap>
+                <ChartCard>
+                  <ChartTitle>Top productos por ingresos</ChartTitle>
+                  <Bars>
+                    {byProduct.slice(0, 8).map((row) => (
+                      <BarItem key={row.nombre}>
+                        <BarLabel>
+                          <span>{row.nombre}</span>
+                          <strong>{formatMoney(row.total)}</strong>
+                        </BarLabel>
+                        <BarTrack>
+                          <BarFill $ratio={row.total / maxByProduct} $tone="warn" />
+                        </BarTrack>
+                      </BarItem>
+                    ))}
+                  </Bars>
+                </ChartCard>
 
-          <SectionHeader>
-            <SectionTitle>Detalle por producto</SectionTitle>
-          </SectionHeader>
-          <TableWrap>
-            <DataTable>
-              <thead>
-                <tr>
-                  <th>Producto</th>
-                  <th className="num">Unidades</th>
-                  <th className="num">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {byProduct.map((row) => (
-                  <tr key={row.nombre}>
-                    <td>{row.nombre}</td>
-                    <td className="num">{row.cantidad}</td>
-                    <td className="num">{formatMoney(row.total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </DataTable>
-          </TableWrap>
+                <ChartCard>
+                  <ChartTitle>Top sucursales por ingresos</ChartTitle>
+                  <Bars>
+                    {byBranch.slice(0, 8).map((row) => (
+                      <BarItem key={row.nombre}>
+                        <BarLabel>
+                          <span>{row.nombre}</span>
+                          <strong>{formatMoney(row.total)}</strong>
+                        </BarLabel>
+                        <BarTrack>
+                          <BarFill $ratio={row.total / maxByBranch} $tone="muted" />
+                        </BarTrack>
+                      </BarItem>
+                    ))}
+                  </Bars>
+                </ChartCard>
+              </ChartsGrid>
 
-          <SectionHeader>
-            <SectionTitle>Detalle por sucursal</SectionTitle>
-          </SectionHeader>
-          <TableWrap>
-            <DataTable>
-              <thead>
-                <tr>
-                  <th>Sucursal</th>
-                  <th className="num">Ventas</th>
-                  <th className="num">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {byBranch.map((row) => (
-                  <tr key={row.nombre}>
-                    <td>{row.nombre}</td>
-                    <td className="num">{row.ventas}</td>
-                    <td className="num">{formatMoney(row.total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </DataTable>
-          </TableWrap>
+              <SectionHeader>
+                <SectionTitle>Detalle por fecha</SectionTitle>
+              </SectionHeader>
+              <TableWrap>
+                <DataTable>
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th className="num">Ventas</th>
+                      <th className="num">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {byDate.map((row) => (
+                      <tr key={row.fecha}>
+                        <td>{row.fecha}</td>
+                        <td className="num">{row.ventas}</td>
+                        <td className="num">{formatMoney(row.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </DataTable>
+              </TableWrap>
+
+              <SectionHeader>
+                <SectionTitle>Detalle por producto</SectionTitle>
+              </SectionHeader>
+              <TableWrap>
+                <DataTable>
+                  <thead>
+                    <tr>
+                      <th>Producto</th>
+                      <th className="num">Unidades</th>
+                      <th className="num">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {byProduct.map((row) => (
+                      <tr key={row.nombre}>
+                        <td>{row.nombre}</td>
+                        <td className="num">{row.cantidad}</td>
+                        <td className="num">{formatMoney(row.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </DataTable>
+              </TableWrap>
+
+              <SectionHeader>
+                <SectionTitle>Detalle por sucursal</SectionTitle>
+              </SectionHeader>
+              <TableWrap>
+                <DataTable>
+                  <thead>
+                    <tr>
+                      <th>Sucursal</th>
+                      <th className="num">Ventas</th>
+                      <th className="num">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {byBranch.map((row) => (
+                      <tr key={row.nombre}>
+                        <td>{row.nombre}</td>
+                        <td className="num">{row.ventas}</td>
+                        <td className="num">{formatMoney(row.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </DataTable>
+              </TableWrap>
+            </>
+          )}
         </>
       )}
     </SectionCard>

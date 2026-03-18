@@ -21,7 +21,14 @@ import {
   PrimaryButton,
   SelectControl,
 } from '../../SHARED/ui/FormControls';
-import { SectionCard, SectionHeader, SectionMeta, SectionTitle } from '../../SHARED/ui/SectionCard';
+import {
+  SectionCard,
+  SectionHeader,
+  SectionHeaderActions,
+  SectionMeta,
+  SectionTitle,
+  SectionToggle,
+} from '../../SHARED/ui/SectionCard';
 import { StatusState } from '../../SHARED/ui/StatusState';
 import type { Branch, CreateBranchInput, UpdateBranchInput } from '../types/Branch';
 
@@ -63,20 +70,32 @@ const SummaryGrid = styled.div`
 const SummaryCard = styled.article`
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 10px 18px rgba(12, 26, 20, 0.06);
 
   p {
     margin: 0;
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     color: var(--text-muted);
   }
 
   strong {
     display: block;
     margin-top: 4px;
-    font-size: 1.05rem;
+    font-size: 0.98rem;
+  }
+
+  @media (max-width: 520px) {
+    padding: 7px 9px;
+
+    p {
+      font-size: 0.72rem;
+    }
+
+    strong {
+      font-size: 0.92rem;
+    }
   }
 `;
 
@@ -106,6 +125,7 @@ export function BranchesSection({
   const [formError, setFormError] = useState<string | null>(null);
   const [editingBranchId, setEditingBranchId] = useState<string | null>(null);
   const [deletingBranchId, setDeletingBranchId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   const friendlyLoadError = toFriendlySupabaseMessage(error, 'sucursales');
   const friendlyCreateError = toFriendlySupabaseMessage(createError, 'sucursales');
   const friendlyUpdateError = toFriendlySupabaseMessage(updateError, 'sucursales');
@@ -212,257 +232,265 @@ export function BranchesSection({
     <SectionCard>
       <SectionHeader>
         <SectionTitle>Sucursales</SectionTitle>
-        <SectionMeta>{branches.length} registradas</SectionMeta>
+        <SectionHeaderActions>
+          <SectionMeta>{branches.length} registradas</SectionMeta>
+          <SectionToggle type="button" onClick={() => setCollapsed((prev) => !prev)} aria-expanded={!collapsed}>
+            {collapsed ? 'Mostrar' : 'Ocultar'}
+          </SectionToggle>
+        </SectionHeaderActions>
       </SectionHeader>
+      {!collapsed && (
+        <>
+          <SummaryGrid>
+            <SummaryCard>
+              <p>Total registradas</p>
+              <strong>{summary.total}</strong>
+            </SummaryCard>
+            <SummaryCard>
+              <p>Activas</p>
+              <strong>{summary.active}</strong>
+            </SummaryCard>
+            <SummaryCard>
+              <p>Inactivas</p>
+              <strong>{summary.inactive}</strong>
+            </SummaryCard>
+            <SummaryCard>
+              <p>Con correo</p>
+              <strong>{summary.withEmail}</strong>
+            </SummaryCard>
+          </SummaryGrid>
 
-      <SummaryGrid>
-        <SummaryCard>
-          <p>Total registradas</p>
-          <strong>{summary.total}</strong>
-        </SummaryCard>
-        <SummaryCard>
-          <p>Activas</p>
-          <strong>{summary.active}</strong>
-        </SummaryCard>
-        <SummaryCard>
-          <p>Inactivas</p>
-          <strong>{summary.inactive}</strong>
-        </SummaryCard>
-        <SummaryCard>
-          <p>Con correo</p>
-          <strong>{summary.withEmail}</strong>
-        </SummaryCard>
-      </SummaryGrid>
+          <FormGrid onSubmit={handleSubmit}>
+            <Fields>
+              <Field>
+                NIT
+                <InputControl
+                  value={form.nit}
+                  onChange={(event) => setForm((prev) => ({ ...prev, nit: event.target.value }))}
+                  placeholder="Ej: 900123456-7"
+                  required
+                />
+              </Field>
+              <Field>
+                Nombre comercial
+                <InputControl
+                  value={form.nombre}
+                  onChange={(event) => setForm((prev) => ({ ...prev, nombre: event.target.value }))}
+                  placeholder="Ej: Sede Centro"
+                  required
+                />
+              </Field>
+              <Field>
+                Pais
+                <SelectControl
+                  value={form.pais}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      pais: event.target.value,
+                      ciudad: '',
+                      localidad: '',
+                    }))
+                  }
+                >
+                  <option value="">Selecciona un pais</option>
+                  {countryOptions.map((country) => (
+                    <option key={country.value} value={country.value}>
+                      {country.label}
+                    </option>
+                  ))}
+                </SelectControl>
+              </Field>
+              <Field>
+                Ciudad
+                <SelectControl
+                  value={form.ciudad}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      ciudad: event.target.value,
+                      localidad: '',
+                    }))
+                  }
+                  disabled={!form.pais}
+                >
+                  <option value="">{form.pais ? 'Selecciona una ciudad' : 'Primero selecciona un pais'}</option>
+                  {cityOptions.map((city) => (
+                    <option key={city.value} value={city.value}>
+                      {city.label}
+                    </option>
+                  ))}
+                </SelectControl>
+              </Field>
+              <Field>
+                Barrio o Localidad
+                <SelectControl
+                  value={form.localidad}
+                  onChange={(event) => setForm((prev) => ({ ...prev, localidad: event.target.value }))}
+                  disabled={!form.ciudad}
+                >
+                  <option value="">{form.ciudad ? 'Selecciona una localidad' : 'Primero selecciona una ciudad'}</option>
+                  {localityOptions.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </SelectControl>
+              </Field>
+              <Field>
+                Telefono
+                <InputControl
+                  value={form.telefono}
+                  onChange={(event) => setForm((prev) => ({ ...prev, telefono: event.target.value }))}
+                  placeholder="Ej: +57 300 000 0000"
+                />
+              </Field>
+              <Field>
+                Correo de sucursal
+                <InputControl
+                  type="email"
+                  value={form.email}
+                  onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+                  placeholder="Ej: sucursal@empresa.com"
+                />
+              </Field>
+              <Field>
+                Direccion
+                <InputControl
+                  value={form.direccion}
+                  onChange={(event) => setForm((prev) => ({ ...prev, direccion: event.target.value }))}
+                  placeholder="Ej: Cra 10 # 20-30"
+                />
+              </Field>
+              <Field>
+                Estado
+                <SelectControl
+                  value={form.estado ? 'ACTIVO' : 'INACTIVO'}
+                  style={{ color: form.estado ? '#5a2f99' : '#5d636a' }}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      estado: event.target.value === 'ACTIVO',
+                    }))
+                  }
+                >
+                  <option value="ACTIVO">Activo</option>
+                  <option value="INACTIVO">Inactivo</option>
+                </SelectControl>
+              </Field>
+            </Fields>
 
-      <FormGrid onSubmit={handleSubmit}>
-        <Fields>
-          <Field>
-            NIT
-            <InputControl
-              value={form.nit}
-              onChange={(event) => setForm((prev) => ({ ...prev, nit: event.target.value }))}
-              placeholder="Ej: 900123456-7"
-              required
-            />
-          </Field>
-          <Field>
-            Nombre comercial
-            <InputControl
-              value={form.nombre}
-              onChange={(event) => setForm((prev) => ({ ...prev, nombre: event.target.value }))}
-              placeholder="Ej: Sede Centro"
-              required
-            />
-          </Field>
-          <Field>
-            Pais
-            <SelectControl
-              value={form.pais}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  pais: event.target.value,
-                  ciudad: '',
-                  localidad: '',
-                }))
-              }
-            >
-              <option value="">Selecciona un pais</option>
-              {countryOptions.map((country) => (
-                <option key={country.value} value={country.value}>
-                  {country.label}
-                </option>
-              ))}
-            </SelectControl>
-          </Field>
-          <Field>
-            Ciudad
-            <SelectControl
-              value={form.ciudad}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  ciudad: event.target.value,
-                  localidad: '',
-                }))
-              }
-              disabled={!form.pais}
-            >
-              <option value="">{form.pais ? 'Selecciona una ciudad' : 'Primero selecciona un pais'}</option>
-              {cityOptions.map((city) => (
-                <option key={city.value} value={city.value}>
-                  {city.label}
-                </option>
-              ))}
-            </SelectControl>
-          </Field>
-          <Field>
-            Barrio o Localidad
-            <SelectControl
-              value={form.localidad}
-              onChange={(event) => setForm((prev) => ({ ...prev, localidad: event.target.value }))}
-              disabled={!form.ciudad}
-            >
-              <option value="">{form.ciudad ? 'Selecciona una localidad' : 'Primero selecciona una ciudad'}</option>
-              {localityOptions.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </SelectControl>
-          </Field>
-          <Field>
-            Telefono
-            <InputControl
-              value={form.telefono}
-              onChange={(event) => setForm((prev) => ({ ...prev, telefono: event.target.value }))}
-              placeholder="Ej: +57 300 000 0000"
-            />
-          </Field>
-          <Field>
-            Correo de sucursal
-            <InputControl
-              type="email"
-              value={form.email}
-              onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-              placeholder="Ej: sucursal@empresa.com"
-            />
-          </Field>
-          <Field>
-            Direccion
-            <InputControl
-              value={form.direccion}
-              onChange={(event) => setForm((prev) => ({ ...prev, direccion: event.target.value }))}
-              placeholder="Ej: Cra 10 # 20-30"
-            />
-          </Field>
-          <Field>
-            Estado
-            <SelectControl
-              value={form.estado ? 'ACTIVO' : 'INACTIVO'}
-              style={{ color: form.estado ? '#1d6046' : '#5d636a' }}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  estado: event.target.value === 'ACTIVO',
-                }))
-              }
-            >
-              <option value="ACTIVO">Activo</option>
-              <option value="INACTIVO">Inactivo</option>
-            </SelectControl>
-          </Field>
-        </Fields>
+            {(formError || friendlyCreateError) && (
+              <StatusState
+                kind={formError ? 'error' : isSetupError(createError) ? 'info' : 'error'}
+                message={formError ?? friendlyCreateError ?? 'Error inesperado.'}
+              />
+            )}
+            {friendlyUpdateError && (
+              <StatusState
+                kind={isSetupError(updateError) ? 'info' : 'error'}
+                message={friendlyUpdateError}
+              />
+            )}
+            {createStatus === 'success' && <StatusState kind="info" message="Sucursal creada correctamente." />}
+            {updateStatus === 'success' && <StatusState kind="info" message="Sucursal actualizada correctamente." />}
+            {(friendlyDeleteError || deleteStatus === 'success') && (
+              <StatusState
+                kind={friendlyDeleteError ? 'error' : 'info'}
+                message={friendlyDeleteError ?? 'Sucursal eliminada correctamente.'}
+              />
+            )}
 
-        {(formError || friendlyCreateError) && (
-          <StatusState
-            kind={formError ? 'error' : isSetupError(createError) ? 'info' : 'error'}
-            message={formError ?? friendlyCreateError ?? 'Error inesperado.'}
-          />
-        )}
-        {friendlyUpdateError && (
-          <StatusState
-            kind={isSetupError(updateError) ? 'info' : 'error'}
-            message={friendlyUpdateError}
-          />
-        )}
-        {createStatus === 'success' && <StatusState kind="info" message="Sucursal creada correctamente." />}
-        {updateStatus === 'success' && <StatusState kind="info" message="Sucursal actualizada correctamente." />}
-        {(friendlyDeleteError || deleteStatus === 'success') && (
-          <StatusState
-            kind={friendlyDeleteError ? 'error' : 'info'}
-            message={friendlyDeleteError ?? 'Sucursal eliminada correctamente.'}
-          />
-        )}
+            <ButtonsRow>
+              <PrimaryButton type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Guardando...' : editingBranchId ? 'Guardar cambios' : 'Registrar sucursal'}
+              </PrimaryButton>
+              {editingBranchId && (
+                <GhostButton type="button" onClick={handleCancelEdit}>
+                  Cancelar edicion
+                </GhostButton>
+              )}
+              <GhostButton type="button" onClick={() => onReload()}>
+                Actualizar listado
+              </GhostButton>
+            </ButtonsRow>
+          </FormGrid>
 
-        <ButtonsRow>
-          <PrimaryButton type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Guardando...' : editingBranchId ? 'Guardar cambios' : 'Registrar sucursal'}
-          </PrimaryButton>
-          {editingBranchId && (
-            <GhostButton type="button" onClick={handleCancelEdit}>
-              Cancelar edicion
-            </GhostButton>
+          <Divider />
+
+          {status === 'loading' && <StatusState kind="loading" message="Cargando sucursales..." />}
+          {status === 'error' && (
+            <StatusState
+              kind={isSetupError(error) ? 'info' : 'error'}
+              message={friendlyLoadError ?? 'Error inesperado.'}
+            />
           )}
-          <GhostButton type="button" onClick={() => onReload()}>
-            Actualizar listado
-          </GhostButton>
-        </ButtonsRow>
-      </FormGrid>
+          {status === 'success' && branches.length === 0 && (
+            <StatusState kind="empty" message="No hay sucursales registradas. Crea la primera con el formulario." />
+          )}
 
-      <Divider />
-
-      {status === 'loading' && <StatusState kind="loading" message="Cargando sucursales..." />}
-      {status === 'error' && (
-        <StatusState
-          kind={isSetupError(error) ? 'info' : 'error'}
-          message={friendlyLoadError ?? 'Error inesperado.'}
-        />
-      )}
-      {status === 'success' && branches.length === 0 && (
-        <StatusState kind="empty" message="No hay sucursales registradas. Crea la primera con el formulario." />
-      )}
-
-      {status === 'success' && branches.length > 0 && (
-        <TableWrap>
-          <DataTable>
-            <thead>
-              <tr>
-                <th className="hide-mobile">NIT</th>
-                <th>Sucursal</th>
-                <th className="hide-mobile">Pais</th>
-                <th>Ciudad</th>
-                <th className="hide-mobile">Barrio/Localidad</th>
-                <th className="hide-mobile">Direccion</th>
-                <th className="hide-mobile">Telefono</th>
-                <th className="hide-mobile">Email</th>
-                <th>Estado</th>
-                <th className="hide-mobile">Creada</th>
-                <th className="actions">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {branches.map((branch) => (
-                <tr key={branch.id}>
-                  <td className="hide-mobile">{branch.nit}</td>
-                  <td>{branch.nombre}</td>
-                  <td className="hide-mobile">{branch.pais}</td>
-                  <td>{branch.ciudad ?? 'Sin ciudad'}</td>
-                  <td className="hide-mobile">{branch.localidad ?? 'Sin localidad'}</td>
-                  <td className="hide-mobile">{branch.direccion ?? 'Sin direccion'}</td>
-                  <td className="hide-mobile">{branch.telefono ?? 'Sin telefono'}</td>
-                  <td className="hide-mobile">{branch.email ?? 'Sin email'}</td>
-                  <td>
-                    <Tag $tone={branch.estado ? 'ok' : 'off'}>
-                      {branch.estado ? 'Activa' : 'Inactiva'}
-                    </Tag>
-                  </td>
-                  <td className="hide-mobile">{formatDateTime(branch.createdAt)}</td>
-                  <td className="actions">
-                    <TableActions>
-                      <GhostButton
-                        type="button"
-                        onClick={() => handleStartEditBranch(branch)}
-                        disabled={deleteStatus === 'submitting'}
-                      >
-                        Editar
-                      </GhostButton>
-                      <DangerButton
-                        type="button"
-                        onClick={() => handleDeleteBranch(branch)}
-                        disabled={deleteStatus === 'submitting'}
-                      >
-                        {deleteStatus === 'submitting' && deletingBranchId === branch.id
-                          ? 'Eliminando...'
-                          : 'Eliminar'}
-                      </DangerButton>
-                    </TableActions>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </DataTable>
-        </TableWrap>
+          {status === 'success' && branches.length > 0 && (
+            <TableWrap>
+              <DataTable>
+                <thead>
+                  <tr>
+                    <th className="hide-mobile">NIT</th>
+                    <th>Sucursal</th>
+                    <th className="hide-mobile">Pais</th>
+                    <th>Ciudad</th>
+                    <th className="hide-mobile">Barrio/Localidad</th>
+                    <th className="hide-mobile">Direccion</th>
+                    <th className="hide-mobile">Telefono</th>
+                    <th className="hide-mobile">Email</th>
+                    <th>Estado</th>
+                    <th className="hide-mobile">Creada</th>
+                    <th className="actions">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {branches.map((branch) => (
+                    <tr key={branch.id}>
+                      <td className="hide-mobile">{branch.nit}</td>
+                      <td>{branch.nombre}</td>
+                      <td className="hide-mobile">{branch.pais}</td>
+                      <td>{branch.ciudad ?? 'Sin ciudad'}</td>
+                      <td className="hide-mobile">{branch.localidad ?? 'Sin localidad'}</td>
+                      <td className="hide-mobile">{branch.direccion ?? 'Sin direccion'}</td>
+                      <td className="hide-mobile">{branch.telefono ?? 'Sin telefono'}</td>
+                      <td className="hide-mobile">{branch.email ?? 'Sin email'}</td>
+                      <td>
+                        <Tag $tone={branch.estado ? 'ok' : 'off'}>
+                          {branch.estado ? 'Activa' : 'Inactiva'}
+                        </Tag>
+                      </td>
+                      <td className="hide-mobile">{formatDateTime(branch.createdAt)}</td>
+                      <td className="actions">
+                        <TableActions>
+                          <GhostButton
+                            type="button"
+                            onClick={() => handleStartEditBranch(branch)}
+                            disabled={deleteStatus === 'submitting'}
+                          >
+                            Editar
+                          </GhostButton>
+                          <DangerButton
+                            type="button"
+                            onClick={() => handleDeleteBranch(branch)}
+                            disabled={deleteStatus === 'submitting'}
+                          >
+                            {deleteStatus === 'submitting' && deletingBranchId === branch.id
+                              ? 'Eliminando...'
+                              : 'Eliminar'}
+                          </DangerButton>
+                        </TableActions>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </DataTable>
+            </TableWrap>
+          )}
+        </>
       )}
     </SectionCard>
   );

@@ -22,7 +22,14 @@ import {
   SelectControl,
   TextAreaControl,
 } from '../../SHARED/ui/FormControls';
-import { SectionCard, SectionHeader, SectionMeta, SectionTitle } from '../../SHARED/ui/SectionCard';
+import {
+  SectionCard,
+  SectionHeader,
+  SectionHeaderActions,
+  SectionMeta,
+  SectionTitle,
+  SectionToggle,
+} from '../../SHARED/ui/SectionCard';
 import { StatusState } from '../../SHARED/ui/StatusState';
 
 interface ProductsSectionProps {
@@ -56,20 +63,32 @@ const SummaryGrid = styled.div`
 const SummaryCard = styled.article`
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 10px 18px rgba(12, 26, 20, 0.06);
 
   p {
     margin: 0;
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     color: var(--text-muted);
   }
 
   strong {
     display: block;
     margin-top: 4px;
-    font-size: 1.05rem;
+    font-size: 0.98rem;
+  }
+
+  @media (max-width: 520px) {
+    padding: 7px 9px;
+
+    p {
+      font-size: 0.72rem;
+    }
+
+    strong {
+      font-size: 0.92rem;
+    }
   }
 `;
 
@@ -100,6 +119,7 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
   const [formError, setFormError] = useState<string | null>(null);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   const friendlyLoadError = toFriendlySupabaseMessage(error, 'productos');
   const friendlyCreateError = toFriendlySupabaseMessage(createError, 'productos');
   const friendlyUpdateError = toFriendlySupabaseMessage(updateError, 'productos');
@@ -195,186 +215,194 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
     <SectionCard>
       <SectionHeader>
         <SectionTitle>Productos</SectionTitle>
-        <SectionMeta>{products.length} disponibles</SectionMeta>
+        <SectionHeaderActions>
+          <SectionMeta>{products.length} disponibles</SectionMeta>
+          <SectionToggle type="button" onClick={() => setCollapsed((prev) => !prev)} aria-expanded={!collapsed}>
+            {collapsed ? 'Mostrar' : 'Ocultar'}
+          </SectionToggle>
+        </SectionHeaderActions>
       </SectionHeader>
+      {!collapsed && (
+        <>
+          <SummaryGrid>
+            <SummaryCard>
+              <p>Total catalogo</p>
+              <strong>{summary.total}</strong>
+            </SummaryCard>
+            <SummaryCard>
+              <p>Activos</p>
+              <strong>{summary.active}</strong>
+            </SummaryCard>
+            <SummaryCard>
+              <p>Inactivos</p>
+              <strong>{summary.inactive}</strong>
+            </SummaryCard>
+            <SummaryCard>
+              <p>Con codigo</p>
+              <strong>{summary.withBarcode}</strong>
+            </SummaryCard>
+          </SummaryGrid>
 
-      <SummaryGrid>
-        <SummaryCard>
-          <p>Total catalogo</p>
-          <strong>{summary.total}</strong>
-        </SummaryCard>
-        <SummaryCard>
-          <p>Activos</p>
-          <strong>{summary.active}</strong>
-        </SummaryCard>
-        <SummaryCard>
-          <p>Inactivos</p>
-          <strong>{summary.inactive}</strong>
-        </SummaryCard>
-        <SummaryCard>
-          <p>Con codigo</p>
-          <strong>{summary.withBarcode}</strong>
-        </SummaryCard>
-      </SummaryGrid>
+          <FormGrid onSubmit={handleSubmit}>
+            <Fields>
+              <Field>
+                Nombre del producto
+                <InputControl
+                  value={form.nombre}
+                  onChange={(event) => setForm((prev) => ({ ...prev, nombre: event.target.value }))}
+                  placeholder="Ej: Carta astral premium"
+                  required
+                />
+              </Field>
+              <Field>
+                Codigo de barra (opcional)
+                <InputControl
+                  value={form.codigoBarra}
+                  onChange={(event) => setForm((prev) => ({ ...prev, codigoBarra: event.target.value }))}
+                  placeholder="Ej: 7701234567890"
+                />
+              </Field>
+              <Field>
+                Precio de venta
+                <InputControl
+                  inputMode="decimal"
+                  value={form.precioVenta}
+                  onChange={(event) => setForm((prev) => ({ ...prev, precioVenta: event.target.value }))}
+                  placeholder="Ej: 90000"
+                  required
+                />
+              </Field>
+              <Field>
+                Estado
+                <SelectControl
+                  value={form.estado ? 'ACTIVO' : 'INACTIVO'}
+                  style={{ color: form.estado ? '#5a2f99' : '#5d636a' }}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      estado: event.target.value === 'ACTIVO',
+                    }))
+                  }
+                >
+                  <option value="ACTIVO">Activo</option>
+                  <option value="INACTIVO">Inactivo</option>
+                </SelectControl>
+              </Field>
+            </Fields>
 
-      <FormGrid onSubmit={handleSubmit}>
-        <Fields>
-          <Field>
-            Nombre del producto
-            <InputControl
-              value={form.nombre}
-              onChange={(event) => setForm((prev) => ({ ...prev, nombre: event.target.value }))}
-              placeholder="Ej: Carta astral premium"
-              required
+            <Field>
+              Descripcion breve (opcional)
+              <TextAreaControl
+                value={form.descripcion}
+                onChange={(event) => setForm((prev) => ({ ...prev, descripcion: event.target.value }))}
+                placeholder="Ej: Sesion guiada con lectura simbolica y orientacion personalizada."
+              />
+            </Field>
+
+            {(formError || friendlyCreateError) && (
+              <StatusState
+                kind={formError ? 'error' : isSetupError(createError) ? 'info' : 'error'}
+                message={formError ?? friendlyCreateError ?? 'Error inesperado.'}
+              />
+            )}
+            {friendlyUpdateError && (
+              <StatusState
+                kind={isSetupError(updateError) ? 'info' : 'error'}
+                message={friendlyUpdateError}
+              />
+            )}
+            {createStatus === 'success' && <StatusState kind="info" message="Producto creado correctamente." />}
+            {updateStatus === 'success' && <StatusState kind="info" message="Producto actualizado correctamente." />}
+            {(friendlyDeleteError || deleteStatus === 'success') && (
+              <StatusState
+                kind={friendlyDeleteError ? 'error' : 'info'}
+                message={friendlyDeleteError ?? 'Producto eliminado correctamente.'}
+              />
+            )}
+
+            <ButtonsRow>
+              <PrimaryButton type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Guardando...' : editingProductId ? 'Guardar cambios' : 'Registrar producto'}
+              </PrimaryButton>
+              {editingProductId && (
+                <GhostButton type="button" onClick={handleCancelEdit}>
+                  Cancelar edicion
+                </GhostButton>
+              )}
+              <GhostButton type="button" onClick={() => reload()}>
+                Actualizar catalogo
+              </GhostButton>
+            </ButtonsRow>
+          </FormGrid>
+
+          <Divider />
+
+          {status === 'loading' && <StatusState kind="loading" message="Cargando productos..." />}
+          {status === 'error' && (
+            <StatusState
+              kind={isSetupError(error) ? 'info' : 'error'}
+              message={friendlyLoadError ?? 'Error inesperado.'}
             />
-          </Field>
-          <Field>
-            Codigo de barra (opcional)
-            <InputControl
-              value={form.codigoBarra}
-              onChange={(event) => setForm((prev) => ({ ...prev, codigoBarra: event.target.value }))}
-              placeholder="Ej: 7701234567890"
-            />
-          </Field>
-          <Field>
-            Precio de venta
-            <InputControl
-              inputMode="decimal"
-              value={form.precioVenta}
-              onChange={(event) => setForm((prev) => ({ ...prev, precioVenta: event.target.value }))}
-              placeholder="Ej: 90000"
-              required
-            />
-          </Field>
-          <Field>
-            Estado
-            <SelectControl
-              value={form.estado ? 'ACTIVO' : 'INACTIVO'}
-              style={{ color: form.estado ? '#1d6046' : '#5d636a' }}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  estado: event.target.value === 'ACTIVO',
-                }))
-              }
-            >
-              <option value="ACTIVO">Activo</option>
-              <option value="INACTIVO">Inactivo</option>
-            </SelectControl>
-          </Field>
-        </Fields>
-
-        <Field>
-          Descripcion breve (opcional)
-          <TextAreaControl
-            value={form.descripcion}
-            onChange={(event) => setForm((prev) => ({ ...prev, descripcion: event.target.value }))}
-            placeholder="Ej: Sesion guiada con lectura simbolica y orientacion personalizada."
-          />
-        </Field>
-
-        {(formError || friendlyCreateError) && (
-          <StatusState
-            kind={formError ? 'error' : isSetupError(createError) ? 'info' : 'error'}
-            message={formError ?? friendlyCreateError ?? 'Error inesperado.'}
-          />
-        )}
-        {friendlyUpdateError && (
-          <StatusState
-            kind={isSetupError(updateError) ? 'info' : 'error'}
-            message={friendlyUpdateError}
-          />
-        )}
-        {createStatus === 'success' && <StatusState kind="info" message="Producto creado correctamente." />}
-        {updateStatus === 'success' && <StatusState kind="info" message="Producto actualizado correctamente." />}
-        {(friendlyDeleteError || deleteStatus === 'success') && (
-          <StatusState
-            kind={friendlyDeleteError ? 'error' : 'info'}
-            message={friendlyDeleteError ?? 'Producto eliminado correctamente.'}
-          />
-        )}
-
-        <ButtonsRow>
-          <PrimaryButton type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Guardando...' : editingProductId ? 'Guardar cambios' : 'Registrar producto'}
-          </PrimaryButton>
-          {editingProductId && (
-            <GhostButton type="button" onClick={handleCancelEdit}>
-              Cancelar edicion
-            </GhostButton>
           )}
-          <GhostButton type="button" onClick={() => reload()}>
-            Actualizar catalogo
-          </GhostButton>
-        </ButtonsRow>
-      </FormGrid>
+          {status === 'success' && products.length === 0 && (
+            <StatusState
+              kind="empty"
+              message="No hay productos registrados. Crea el primero con el formulario."
+            />
+          )}
 
-      <Divider />
-
-      {status === 'loading' && <StatusState kind="loading" message="Cargando productos..." />}
-      {status === 'error' && (
-        <StatusState
-          kind={isSetupError(error) ? 'info' : 'error'}
-          message={friendlyLoadError ?? 'Error inesperado.'}
-        />
-      )}
-      {status === 'success' && products.length === 0 && (
-        <StatusState
-          kind="empty"
-          message="No hay productos registrados. Crea el primero con el formulario."
-        />
-      )}
-
-      {status === 'success' && products.length > 0 && (
-        <TableWrap>
-          <DataTable>
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th className="hide-mobile">Codigo</th>
-                <th className="num">Venta</th>
-                <th>Estado</th>
-                <th className="hide-mobile">Actualizado</th>
-                <th className="actions">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((product) => (
-                <tr key={product.id}>
-                  <td>{product.nombre}</td>
-                  <td className="hide-mobile">{product.codigoBarra ?? 'Sin codigo'}</td>
-                  <td className="num">{formatMoney(product.precioVenta)}</td>
-                  <td>
-                    <Tag $tone={product.estado ? 'ok' : 'off'}>
-                      {product.estado ? 'Activo' : 'Inactivo'}
-                    </Tag>
-                  </td>
-                  <td className="hide-mobile">{formatDateTime(product.updatedAt)}</td>
-                  <td className="actions">
-                    <TableActions>
-                      <GhostButton
-                        type="button"
-                        onClick={() => handleStartEditProduct(product.id)}
-                        disabled={deleteStatus === 'submitting'}
-                      >
-                        Editar
-                      </GhostButton>
-                      <DangerButton
-                        type="button"
-                        onClick={() => handleDeleteProduct(product.id, product.nombre)}
-                        disabled={deleteStatus === 'submitting'}
-                      >
-                        {deleteStatus === 'submitting' && deletingProductId === product.id
-                          ? 'Eliminando...'
-                          : 'Eliminar'}
-                      </DangerButton>
-                    </TableActions>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </DataTable>
-        </TableWrap>
+          {status === 'success' && products.length > 0 && (
+            <TableWrap>
+              <DataTable>
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th className="hide-mobile">Codigo</th>
+                    <th className="num">Venta</th>
+                    <th>Estado</th>
+                    <th className="hide-mobile">Actualizado</th>
+                    <th className="actions">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((product) => (
+                    <tr key={product.id}>
+                      <td>{product.nombre}</td>
+                      <td className="hide-mobile">{product.codigoBarra ?? 'Sin codigo'}</td>
+                      <td className="num">{formatMoney(product.precioVenta)}</td>
+                      <td>
+                        <Tag $tone={product.estado ? 'ok' : 'off'}>
+                          {product.estado ? 'Activo' : 'Inactivo'}
+                        </Tag>
+                      </td>
+                      <td className="hide-mobile">{formatDateTime(product.updatedAt)}</td>
+                      <td className="actions">
+                        <TableActions>
+                          <GhostButton
+                            type="button"
+                            onClick={() => handleStartEditProduct(product.id)}
+                            disabled={deleteStatus === 'submitting'}
+                          >
+                            Editar
+                          </GhostButton>
+                          <DangerButton
+                            type="button"
+                            onClick={() => handleDeleteProduct(product.id, product.nombre)}
+                            disabled={deleteStatus === 'submitting'}
+                          >
+                            {deleteStatus === 'submitting' && deletingProductId === product.id
+                              ? 'Eliminando...'
+                              : 'Eliminar'}
+                          </DangerButton>
+                        </TableActions>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </DataTable>
+            </TableWrap>
+          )}
+        </>
       )}
     </SectionCard>
   );

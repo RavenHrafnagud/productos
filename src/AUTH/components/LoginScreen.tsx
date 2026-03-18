@@ -31,7 +31,7 @@ const Layout = styled.main`
     position: absolute;
     inset: 0;
     background:
-      radial-gradient(circle at 20% 20%, rgba(28, 92, 70, 0.18) 0%, transparent 35%),
+      radial-gradient(circle at 20% 20%, rgba(109, 61, 182, 0.2) 0%, transparent 35%),
       radial-gradient(circle at 90% 10%, rgba(210, 164, 110, 0.2) 0%, transparent 40%);
     pointer-events: none;
   }
@@ -41,16 +41,25 @@ const Card = styled.section`
   width: min(460px, 100%);
   border-radius: 22px;
   border: 1px solid var(--border-soft);
-  background: linear-gradient(180deg, #ffffff 0%, #f7faf8 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #faf7ff 100%);
   box-shadow: var(--shadow-soft);
   padding: 26px;
   position: relative;
   z-index: 1;
+
+  @media (max-width: 520px) {
+    padding: 20px;
+    border-radius: 18px;
+  }
 `;
 
 const Title = styled.h1`
   margin: 0;
   font-size: 1.75rem;
+
+  @media (max-width: 520px) {
+    font-size: 1.5rem;
+  }
 `;
 
 const Subtitle = styled.p`
@@ -72,7 +81,7 @@ const Input = styled.input`
   padding: 12px;
   outline: none;
   margin-bottom: 14px;
-  background: linear-gradient(180deg, #ffffff 0%, #f6f9f8 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8f6fc 100%);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 
   :focus {
@@ -87,16 +96,16 @@ const Submit = styled.button`
   border: none;
   border-radius: 10px;
   padding: 12px 14px;
-  background: linear-gradient(115deg, #1d5f4a 0%, #2b8a67 100%);
-  color: #f8fffc;
+  background: linear-gradient(115deg, #5f2da8 0%, #8e57df 100%);
+  color: #fbf7ff;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 14px 24px rgba(20, 62, 48, 0.18);
+  box-shadow: 0 14px 24px rgba(58, 33, 94, 0.24);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 
   :hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 16px 28px rgba(20, 62, 48, 0.22);
+    box-shadow: 0 16px 28px rgba(58, 33, 94, 0.32);
   }
 
   :disabled {

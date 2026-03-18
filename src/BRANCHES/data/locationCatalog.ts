@@ -1,9 +1,12 @@
 /**
  * Catalogo de ubicaciones para formularios de sucursales.
- * - Paises y ciudades: libreria country-state-city.
+ * - Paises y ciudades: catalogo local optimizado para movil.
  * - Barrios/localidades: catalogo curado + fallback generico.
  */
-import { City, Country } from 'country-state-city';
+import {
+  getCityOptionsByCountry,
+  getCountryOptions as getSharedCountryOptions,
+} from '../../SHARED/constants/geo';
 
 export interface OptionItem {
   value: string;
@@ -93,26 +96,14 @@ function normalizeKey(value: string) {
  * Lista todos los paises disponibles.
  */
 export function getCountryOptions(): OptionItem[] {
-  return Country.getAllCountries()
-    .map((country) => ({ value: country.isoCode, label: country.name }))
-    .sort((a, b) => a.label.localeCompare(b.label, 'es'));
+  return getSharedCountryOptions();
 }
 
 /**
  * Lista ciudades de un pais por codigo ISO.
  */
 export function getCityOptions(countryCode: string): OptionItem[] {
-  if (!countryCode) return [];
-
-  const uniqueCities = new Map<string, OptionItem>();
-  for (const city of City.getCitiesOfCountry(countryCode) ?? []) {
-    const key = normalizeKey(city.name);
-    if (!uniqueCities.has(key)) {
-      uniqueCities.set(key, { value: city.name, label: city.name });
-    }
-  }
-
-  return [...uniqueCities.values()].sort((a, b) => a.label.localeCompare(b.label, 'es'));
+  return getCityOptionsByCountry(countryCode);
 }
 
 /**

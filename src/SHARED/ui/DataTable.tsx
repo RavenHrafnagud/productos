@@ -50,14 +50,14 @@ export const DataTable = styled.table`
   }
 
   td.actions button {
-    padding: 6px 10px;
-    font-size: 0.78rem;
+    padding: 5px 8px;
+    font-size: 0.75rem;
     border-radius: 8px;
   }
 
   td.actions select {
-    padding: 6px 30px 6px 10px;
-    font-size: 0.78rem;
+    padding: 5px 28px 5px 8px;
+    font-size: 0.75rem;
     border-radius: 8px;
   }
 
@@ -82,15 +82,15 @@ export const DataTable = styled.table`
     font-size: 0.79rem;
     text-transform: uppercase;
     letter-spacing: 0.6px;
-    background: #f4f7f5;
+    background: #f6f1fb;
   }
 
   tbody tr:nth-child(even) {
-    background: #fbfcfb;
+    background: #fcfaff;
   }
 
   tbody tr:hover {
-    background: #f0f6f3;
+    background: #f3eefb;
   }
 
   @media (max-width: 640px) {
@@ -110,6 +110,14 @@ export const DataTable = styled.table`
     td.actions select {
       width: 100%;
     }
+
+    td.actions > div.no-wrap {
+      flex-wrap: wrap;
+    }
+  }
+
+  @media (max-width: 520px) {
+    font-size: 0.82rem;
   }
 
   @media (max-width: 720px) {
@@ -130,11 +138,11 @@ export const Tag = styled.span<{ $tone?: 'ok' | 'off' | 'warn' }>`
   background: ${({ $tone }) => {
     if ($tone === 'off') return '#eceff3';
     if ($tone === 'warn') return '#ffedd8';
-    return '#def4ea';
+    return '#eee4ff';
   }};
   color: ${({ $tone }) => {
     if ($tone === 'off') return '#555f6d';
     if ($tone === 'warn') return '#7a4a1f';
-    return '#1d6046';
+    return '#5a2f99';
   }};
 `;

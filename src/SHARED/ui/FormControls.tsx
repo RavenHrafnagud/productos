@@ -6,6 +6,10 @@ import styled from 'styled-components';
 export const FormGrid = styled.form`
   display: grid;
   gap: 12px;
+
+  @media (max-width: 520px) {
+    gap: 10px;
+  }
 `;
 
 export const Fields = styled.div`
@@ -16,6 +20,10 @@ export const Fields = styled.div`
   @media (max-width: 860px) {
     grid-template-columns: 1fr;
   }
+
+  @media (max-width: 520px) {
+    gap: 8px;
+  }
 `;
 
 export const Field = styled.label`
@@ -24,13 +32,17 @@ export const Field = styled.label`
   font-size: 0.88rem;
   color: var(--text-muted);
   font-weight: 600;
+
+  @media (max-width: 520px) {
+    font-size: 0.84rem;
+  }
 `;
 
 export const InputControl = styled.input`
   width: 100%;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, #ffffff 0%, #f6f9f8 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8f6fc 100%);
   color: var(--text-main);
   padding: 11px 12px;
   outline: none;
@@ -43,8 +55,12 @@ export const InputControl = styled.input`
   }
 
   :disabled {
-    background: #f2f5f3;
-    color: #87948f;
+    background: #f3eff9;
+    color: #887f95;
+  }
+
+  @media (max-width: 520px) {
+    padding: 10px 11px;
   }
 `;
 
@@ -53,7 +69,7 @@ export const TextAreaControl = styled.textarea`
   min-height: 92px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, #ffffff 0%, #f6f9f8 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8f6fc 100%);
   color: var(--text-main);
   padding: 11px 12px;
   resize: vertical;
@@ -67,8 +83,12 @@ export const TextAreaControl = styled.textarea`
   }
 
   :disabled {
-    background: #f2f5f3;
-    color: #87948f;
+    background: #f3eff9;
+    color: #887f95;
+  }
+
+  @media (max-width: 520px) {
+    padding: 10px 11px;
   }
 `;
 
@@ -76,7 +96,7 @@ export const SelectControl = styled.select`
   width: 100%;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, #ffffff 0%, #f6f9f8 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8f6fc 100%);
   color: var(--text-main);
   padding: 11px 12px;
   outline: none;
@@ -94,8 +114,12 @@ export const SelectControl = styled.select`
   }
 
   :disabled {
-    background: #f2f5f3;
-    color: #87948f;
+    background: #f3eff9;
+    color: #887f95;
+  }
+
+  @media (max-width: 520px) {
+    padding: 10px 11px;
   }
 `;
 
@@ -113,41 +137,52 @@ export const ButtonsRow = styled.div`
       width: 100%;
     }
   }
+
+  @media (max-width: 430px) {
+    gap: 6px;
+  }
 `;
 
 export const PrimaryButton = styled.button`
   border: none;
   border-radius: var(--radius-sm);
-  padding: 10px 14px;
+  padding: 9px 12px;
   cursor: pointer;
   font-weight: 700;
-  color: #f3fff9;
-  background: linear-gradient(125deg, #1e6b54 0%, #2a8a68 100%);
-  box-shadow: 0 10px 20px rgba(20, 62, 48, 0.18);
+  font-size: 0.9rem;
+  color: #faf4ff;
+  background: linear-gradient(125deg, #6b35bf 0%, #8b53db 100%);
+  box-shadow: 0 10px 20px rgba(59, 33, 96, 0.24);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 
   :hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 12px 24px rgba(20, 62, 48, 0.22);
+    box-shadow: 0 12px 24px rgba(59, 33, 96, 0.3);
   }
 
   :disabled {
     opacity: 0.6;
     cursor: not-allowed;
   }
+
+  @media (max-width: 520px) {
+    padding: 8px 10px;
+    font-size: 0.84rem;
+  }
 `;
 
 export const GhostButton = styled.button`
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
-  padding: 10px 14px;
+  padding: 9px 12px;
   cursor: pointer;
   color: var(--text-main);
+  font-size: 0.9rem;
   background: rgba(255, 255, 255, 0.8);
   transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
 
   :hover:not(:disabled) {
-    border-color: #c7d6cf;
+    border-color: #cfc2e6;
     background: #ffffff;
     transform: translateY(-1px);
   }
@@ -156,14 +191,20 @@ export const GhostButton = styled.button`
     opacity: 0.6;
     cursor: not-allowed;
   }
+
+  @media (max-width: 520px) {
+    padding: 8px 10px;
+    font-size: 0.84rem;
+  }
 `;
 
 export const DangerButton = styled.button`
   border: 1px solid #e2b4b4;
   border-radius: var(--radius-sm);
-  padding: 10px 14px;
+  padding: 9px 12px;
   cursor: pointer;
   color: #8e2b2b;
+  font-size: 0.9rem;
   background: linear-gradient(135deg, #fff4f4 0%, #ffecec 100%);
   transition: border-color 0.2s ease, transform 0.2s ease;
 
@@ -176,12 +217,17 @@ export const DangerButton = styled.button`
     opacity: 0.6;
     cursor: not-allowed;
   }
+
+  @media (max-width: 520px) {
+    padding: 8px 10px;
+    font-size: 0.84rem;
+  }
 `;
 
 export const Divider = styled.hr`
   margin: 14px 0;
   border: 0;
   border-top: 1px solid transparent;
-  background: linear-gradient(90deg, rgba(219, 228, 223, 0) 0%, rgba(219, 228, 223, 0.9) 15%, rgba(219, 228, 223, 0.9) 85%, rgba(219, 228, 223, 0) 100%);
+  background: linear-gradient(90deg, rgba(222, 215, 239, 0) 0%, rgba(222, 215, 239, 0.9) 15%, rgba(222, 215, 239, 0.9) 85%, rgba(222, 215, 239, 0) 100%);
   height: 1px;
 `;

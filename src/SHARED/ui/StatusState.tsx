@@ -9,10 +9,10 @@ interface StatusStateProps {
 }
 
 const toneByKind: Record<StatusStateProps['kind'], { bg: string; border: string; text: string }> = {
-  loading: { bg: '#f2f6f4', border: '#d1ded8', text: '#1f3e34' },
+  loading: { bg: '#f3eefb', border: '#d8cdef', text: '#4f2f7d' },
   error: { bg: '#fdecec', border: '#f1b6b6', text: '#7d2b2b' },
   empty: { bg: '#f9f2ea', border: '#ead2b7', text: '#6b482a' },
-  info: { bg: '#eef5ff', border: '#c1d7f2', text: '#204465' },
+  info: { bg: '#f2ecff', border: '#d6c6f7', text: '#4a2f82' },
 };
 
 const Box = styled.div<{ $kind: StatusStateProps['kind'] }>`

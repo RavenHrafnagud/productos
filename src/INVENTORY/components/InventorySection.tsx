@@ -22,7 +22,14 @@ import {
   PrimaryButton,
   SelectControl,
 } from '../../SHARED/ui/FormControls';
-import { SectionCard, SectionHeader, SectionMeta, SectionTitle } from '../../SHARED/ui/SectionCard';
+import {
+  SectionCard,
+  SectionHeader,
+  SectionHeaderActions,
+  SectionMeta,
+  SectionTitle,
+  SectionToggle,
+} from '../../SHARED/ui/SectionCard';
 import { StatusState } from '../../SHARED/ui/StatusState';
 import { useInventory } from '../hooks/useInventory';
 
@@ -55,20 +62,32 @@ const SummaryGrid = styled.div`
 const SummaryCard = styled.article`
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 10px 18px rgba(12, 26, 20, 0.06);
 
   p {
     margin: 0;
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     color: var(--text-muted);
   }
 
   strong {
     display: block;
     margin-top: 4px;
-    font-size: 1.05rem;
+    font-size: 0.98rem;
+  }
+
+  @media (max-width: 520px) {
+    padding: 7px 9px;
+
+    p {
+      font-size: 0.72rem;
+    }
+
+    strong {
+      font-size: 0.92rem;
+    }
   }
 `;
 
@@ -82,9 +101,13 @@ const TableActions = styled.div`
 const BranchPanel = styled.section`
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
-  padding: 12px;
-  background: linear-gradient(140deg, #ffffff 0%, #f2faf6 100%);
-  box-shadow: 0 12px 22px rgba(12, 26, 20, 0.08);
+  padding: 10px;
+  background: linear-gradient(140deg, #ffffff 0%, #f6f0ff 100%);
+  box-shadow: 0 12px 22px rgba(39, 24, 66, 0.1);
+
+  @media (max-width: 520px) {
+    padding: 8px;
+  }
 `;
 
 const BranchPanelHeader = styled.div`
@@ -118,10 +141,10 @@ const BranchGrid = styled.div`
 const BranchCard = styled.button<{ $active?: boolean; $disabled?: boolean }>`
   text-align: left;
   border-radius: var(--radius-sm);
-  border: 1px solid ${({ $active }) => ($active ? '#7bc2a1' : 'var(--border-soft)')};
+  border: 1px solid ${({ $active }) => ($active ? '#b194e8' : 'var(--border-soft)')};
   background: ${({ $active }) =>
-    $active ? 'linear-gradient(135deg, #e3f7ed 0%, #d6f1e2 100%)' : '#ffffff'};
-  padding: 10px 12px;
+    $active ? 'linear-gradient(135deg, #efe4ff 0%, #e0d1fb 100%)' : '#ffffff'};
+  padding: 8px 10px;
   cursor: ${({ $disabled }) => ($disabled ? 'not-allowed' : 'pointer')};
   color: var(--text-main);
   opacity: ${({ $disabled }) => ($disabled ? 0.6 : 1)};
@@ -129,19 +152,31 @@ const BranchCard = styled.button<{ $active?: boolean; $disabled?: boolean }>`
 
   :hover {
     transform: ${({ $disabled }) => ($disabled ? 'none' : 'translateY(-1px)')};
-    box-shadow: ${({ $disabled }) => ($disabled ? 'none' : '0 10px 18px rgba(12, 26, 20, 0.08)')};
+    box-shadow: ${({ $disabled }) => ($disabled ? 'none' : '0 10px 18px rgba(39, 24, 66, 0.12)')};
   }
 
   strong {
     display: block;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
   }
 
   span {
     display: block;
     color: var(--text-muted);
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     margin-top: 2px;
+  }
+
+  @media (max-width: 520px) {
+    padding: 7px 9px;
+
+    strong {
+      font-size: 0.86rem;
+    }
+
+    span {
+      font-size: 0.72rem;
+    }
   }
 `;
 
@@ -167,6 +202,7 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
   const [formError, setFormError] = useState<string | null>(null);
   const [editingInventoryId, setEditingInventoryId] = useState<string | null>(null);
   const [deletingInventoryId, setDeletingInventoryId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   const friendlyLoadError = toFriendlySupabaseMessage(error, 'inventario');
   const friendlySaveError = toFriendlySupabaseMessage(saveError, 'inventario');
   const friendlyDeleteError = toFriendlySupabaseMessage(deleteError, 'inventario');
@@ -285,14 +321,21 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
     <SectionCard>
       <SectionHeader>
         <SectionTitle>Inventario</SectionTitle>
-        <SectionMeta>
-          {branchId && selectedBranchName
-            ? `Sucursal activa: ${selectedBranchName}`
-            : 'Sucursal no seleccionada'}
-        </SectionMeta>
+        <SectionHeaderActions>
+          <SectionMeta>
+            {branchId && selectedBranchName
+              ? `Sucursal activa: ${selectedBranchName}`
+              : 'Sucursal no seleccionada'}
+          </SectionMeta>
+          <SectionToggle type="button" onClick={() => setCollapsed((prev) => !prev)} aria-expanded={!collapsed}>
+            {collapsed ? 'Mostrar' : 'Ocultar'}
+          </SectionToggle>
+        </SectionHeaderActions>
       </SectionHeader>
 
-      <SummaryGrid>
+      {!collapsed && (
+        <>
+          <SummaryGrid>
         <SummaryCard>
           <p>Items en inventario</p>
           <strong>{summary.total}</strong>
@@ -309,7 +352,7 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
           <p>Movimientos</p>
           <strong>{summary.movimientos}</strong>
         </SummaryCard>
-      </SummaryGrid>
+          </SummaryGrid>
 
       <BranchPanel>
         <BranchPanelHeader>
@@ -340,7 +383,7 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
             );
           })}
         </BranchGrid>
-      </BranchPanel>
+          </BranchPanel>
 
       <FormGrid onSubmit={handleSubmit}>
         <Fields>
@@ -426,143 +469,147 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
             Actualizar lista
           </GhostButton>
         </ButtonsRow>
-      </FormGrid>
+          </FormGrid>
 
-      <Divider />
-
-      {!branchId && <StatusState kind="info" message="Selecciona una sucursal para ver su inventario." />}
-      {branchId && status === 'loading' && <StatusState kind="loading" message="Cargando inventario..." />}
-      {branchId && status === 'error' && (
-        <StatusState
-          kind={isSetupError(error) ? 'info' : 'error'}
-          message={friendlyLoadError ?? 'Error inesperado.'}
-        />
-      )}
-      {branchId && status === 'success' && inventory.length === 0 && (
-        <StatusState
-          kind="empty"
-          message="No hay inventario cargado para esta sucursal. Registra las existencias iniciales."
-        />
-      )}
-
-      {branchId && status === 'success' && inventory.length > 0 && (
-        <TableWrap>
-          <DataTable>
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th className="hide-mobile">Codigo</th>
-                <th className="num">Disponible</th>
-                <th className="num">Minimo</th>
-                <th>Estado</th>
-                <th className="hide-mobile">Actualizado</th>
-                <th className="actions">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {inventory.map((item) => {
-                const lowStock = item.cantidadActual <= item.cantidadMinima;
-                return (
-                  <tr key={item.id}>
-                    <td>{item.productoNombre}</td>
-                    <td className="hide-mobile">{item.codigoBarra ?? 'Sin codigo'}</td>
-                    <td className="num">{item.cantidadActual}</td>
-                    <td className="num">{item.cantidadMinima}</td>
-                    <td>
-                      <Tag $tone={lowStock ? 'warn' : 'ok'}>{lowStock ? 'Bajo' : 'Estable'}</Tag>
-                    </td>
-                    <td className="hide-mobile">{formatDateTime(item.updatedAt)}</td>
-                    <td className="actions">
-                      <TableActions>
-                        <GhostButton
-                          type="button"
-                          onClick={() =>
-                            handleStartEditInventory({
-                              id: item.id,
-                              productoId: item.productoId,
-                              cantidadActual: item.cantidadActual,
-                              cantidadMinima: item.cantidadMinima,
-                            })
-                          }
-                          disabled={deleteStatus === 'submitting' || saveStatus === 'submitting'}
-                        >
-                          Editar
-                        </GhostButton>
-                        <DangerButton
-                          type="button"
-                          onClick={() =>
-                            handleDeleteInventory({
-                              inventarioId: item.id,
-                              productoId: item.productoId,
-                              sucursalId: item.sucursalId,
-                              productoNombre: item.productoNombre,
-                            })
-                          }
-                          disabled={deleteStatus === 'submitting' || saveStatus === 'submitting'}
-                        >
-                          {deleteStatus === 'submitting' && deletingInventoryId === item.id
-                            ? 'Eliminando...'
-                            : 'Eliminar'}
-                        </DangerButton>
-                      </TableActions>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </DataTable>
-        </TableWrap>
-      )}
-
-      {branchId && status === 'success' && (
-        <>
           <Divider />
-          <SectionHeader>
-            <SectionTitle>Movimientos recientes</SectionTitle>
-            <SectionMeta>{movements.length} registrados</SectionMeta>
-          </SectionHeader>
 
-          {movements.length === 0 && (
-            <StatusState kind="empty" message="Sin movimientos para esta sucursal por ahora." />
+          {!branchId && <StatusState kind="info" message="Selecciona una sucursal para ver su inventario." />}
+          {branchId && status === 'loading' && <StatusState kind="loading" message="Cargando inventario..." />}
+          {branchId && status === 'error' && (
+            <StatusState
+              kind={isSetupError(error) ? 'info' : 'error'}
+              message={friendlyLoadError ?? 'Error inesperado.'}
+            />
+          )}
+          {branchId && status === 'success' && inventory.length === 0 && (
+            <StatusState
+              kind="empty"
+              message="No hay inventario cargado para esta sucursal. Registra las existencias iniciales."
+            />
           )}
 
-          {movements.length > 0 && (
+          {branchId && status === 'success' && inventory.length > 0 && (
             <TableWrap>
               <DataTable>
                 <thead>
                   <tr>
-                    <th>Fecha</th>
-                    <th className="hide-mobile">Sucursal</th>
                     <th>Producto</th>
-                    <th>Tipo</th>
-                    <th className="num">Cantidad</th>
-                    <th className="hide-mobile">Motivo</th>
+                    <th className="hide-mobile">Codigo</th>
+                    <th className="num">Disponible</th>
+                    <th className="num">Minimo</th>
+                    <th>Estado</th>
+                    <th className="hide-mobile">Actualizado</th>
+                    <th className="actions">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {movements.map((movement) => {
-                    const tone =
-                      movement.tipoMovimiento === 'ENTRADA'
-                        ? 'ok'
-                        : movement.tipoMovimiento === 'SALIDA'
-                          ? 'warn'
-                          : 'off';
+                  {inventory.map((item) => {
+                    const lowStock = item.cantidadActual <= item.cantidadMinima;
                     return (
-                      <tr key={movement.id}>
-                        <td>{formatDateTime(movement.fecha)}</td>
-                        <td className="hide-mobile">{branchesById.get(movement.sucursalId) ?? 'Sucursal no encontrada'}</td>
-                        <td>{movement.productoNombre}</td>
+                      <tr key={item.id}>
+                        <td>{item.productoNombre}</td>
+                        <td className="hide-mobile">{item.codigoBarra ?? 'Sin codigo'}</td>
+                        <td className="num">{item.cantidadActual}</td>
+                        <td className="num">{item.cantidadMinima}</td>
                         <td>
-                          <Tag $tone={tone}>{movement.tipoMovimiento}</Tag>
+                          <Tag $tone={lowStock ? 'warn' : 'ok'}>{lowStock ? 'Bajo' : 'Estable'}</Tag>
                         </td>
-                        <td className="num">{movement.cantidad}</td>
-                        <td className="hide-mobile">{movement.motivo ?? 'Sin motivo'}</td>
+                        <td className="hide-mobile">{formatDateTime(item.updatedAt)}</td>
+                        <td className="actions">
+                          <TableActions>
+                            <GhostButton
+                              type="button"
+                              onClick={() =>
+                                handleStartEditInventory({
+                                  id: item.id,
+                                  productoId: item.productoId,
+                                  cantidadActual: item.cantidadActual,
+                                  cantidadMinima: item.cantidadMinima,
+                                })
+                              }
+                              disabled={deleteStatus === 'submitting' || saveStatus === 'submitting'}
+                            >
+                              Editar
+                            </GhostButton>
+                            <DangerButton
+                              type="button"
+                              onClick={() =>
+                                handleDeleteInventory({
+                                  inventarioId: item.id,
+                                  productoId: item.productoId,
+                                  sucursalId: item.sucursalId,
+                                  productoNombre: item.productoNombre,
+                                })
+                              }
+                              disabled={deleteStatus === 'submitting' || saveStatus === 'submitting'}
+                            >
+                              {deleteStatus === 'submitting' && deletingInventoryId === item.id
+                                ? 'Eliminando...'
+                                : 'Eliminar'}
+                            </DangerButton>
+                          </TableActions>
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </DataTable>
             </TableWrap>
+          )}
+
+          {branchId && status === 'success' && (
+            <>
+              <Divider />
+              <SectionHeader>
+                <SectionTitle>Movimientos recientes</SectionTitle>
+                <SectionMeta>{movements.length} registrados</SectionMeta>
+              </SectionHeader>
+
+              {movements.length === 0 && (
+                <StatusState kind="empty" message="Sin movimientos para esta sucursal por ahora." />
+              )}
+
+              {movements.length > 0 && (
+                <TableWrap>
+                  <DataTable>
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th className="hide-mobile">Sucursal</th>
+                        <th>Producto</th>
+                        <th>Tipo</th>
+                        <th className="num">Cantidad</th>
+                        <th className="hide-mobile">Motivo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {movements.map((movement) => {
+                        const tone =
+                          movement.tipoMovimiento === 'ENTRADA'
+                            ? 'ok'
+                            : movement.tipoMovimiento === 'SALIDA'
+                              ? 'warn'
+                              : 'off';
+                        return (
+                          <tr key={movement.id}>
+                            <td>{formatDateTime(movement.fecha)}</td>
+                            <td className="hide-mobile">
+                              {branchesById.get(movement.sucursalId) ?? 'Sucursal no encontrada'}
+                            </td>
+                            <td>{movement.productoNombre}</td>
+                            <td>
+                              <Tag $tone={tone}>{movement.tipoMovimiento}</Tag>
+                            </td>
+                            <td className="num">{movement.cantidad}</td>
+                            <td className="hide-mobile">{movement.motivo ?? 'Sin motivo'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </DataTable>
+                </TableWrap>
+              )}
+            </>
           )}
         </>
       )}

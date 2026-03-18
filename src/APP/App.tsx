@@ -2,11 +2,10 @@
  * Componente raiz de aplicacion.
  * Orquesta autenticacion y rutas por modulos del panel.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { LoginScreen } from '../AUTH/components/LoginScreen';
 import { useAuthSession } from '../AUTH/hooks/useAuthSession';
-import { BranchesSection } from '../BRANCHES/components/BranchesSection';
 import { useBranches } from '../BRANCHES/hooks/useBranches';
 import type { CreateBranchInput } from '../BRANCHES/types/Branch';
 import { DashboardSection } from '../DASHBOARD/components/DashboardSection';
@@ -17,7 +16,16 @@ import { appEnv, isSupabaseConfigured } from '../SHARED/config/env';
 import { StatusState } from '../SHARED/ui/StatusState';
 import { isSetupError, toFriendlySupabaseMessage } from '../SHARED/utils/supabaseGuidance';
 import { getMyProfile } from '../USERS/api/userManagementRepository';
-import { UsersSection } from '../USERS/components/UsersSection';
+const BranchesSection = lazy(() =>
+  import('../BRANCHES/components/BranchesSection').then((module) => ({
+    default: module.BranchesSection,
+  })),
+);
+const UsersSection = lazy(() =>
+  import('../USERS/components/UsersSection').then((module) => ({
+    default: module.UsersSection,
+  })),
+);
 import {
   ActionButton,
   AlertStrip,
@@ -26,6 +34,8 @@ import {
   HeaderCopy,
   HeaderTitle,
   MainContent,
+  MobileMenuButton,
+  MobileMenuPanel,
   Page,
   ShellLayout,
   SideMenu,
@@ -47,6 +57,52 @@ const AREA_MENU: Array<{ id: AppArea; path: string; label: string; description: 
   { id: 'inventario', path: '/inventario', label: 'Inventario', description: 'Existencias, ajustes y movimientos.' },
   { id: 'usuarios', path: '/usuarios', label: 'Usuarios', description: 'Perfil, roles y asignacion de permisos.' },
 ];
+
+const AREA_ICONS: Record<AppArea, ReactElement> = {
+  dashboard: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="6.5" cy="7" r="2.3" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="16.5" cy="5.5" r="2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="14.5" cy="16.5" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M8.6 8.2l5.4 6.2M8.4 6.4l6.2-1.4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  ),
+  ventas: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="8" cy="9" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="15.5" cy="13.5" r="4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M6.8 9h2.4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  ),
+  productos: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="5" y="4.5" width="14" height="16" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M8 8.2h8M8 11.2h8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M12 14.4l1.1 2.2 2.4.3-1.8 1.6.5 2.4-2.2-1.2-2.2 1.2.5-2.4-1.8-1.6 2.4-.3z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+    </svg>
+  ),
+  sucursales: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 21s6-6.2 6-11a6 6 0 1 0-12 0c0 4.8 6 11 6 11z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="12" cy="10" r="2.6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M12 6.6l.9 1.6 1.8.2-1.3 1.2.3 1.8-1.7-.9-1.7.9.3-1.8-1.3-1.2 1.8-.2z" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+    </svg>
+  ),
+  inventario: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 7.5h14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <rect x="6" y="7.5" width="12" height="11" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M9.5 5.3c.4 1 .2 2.2-.7 3.2 1.2-.3 2.4.2 3.1 1.2" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  ),
+  usuarios: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M4 20c1.8-3.6 5-6 8-6s6.2 2.4 8 6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M7.5 4.2h9" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  ),
+};
 
 const AREA_TITLES: Record<AppArea, string> = {
   dashboard: 'Dashboard comercial',
@@ -101,6 +157,7 @@ export default function App() {
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [identityLabel, setIdentityLabel] = useState('');
   const [identityRole, setIdentityRole] = useState<UserRole>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const { session, loading, authError, signIn, signOut, clearAuthError } = useAuthSession();
   const {
@@ -187,6 +244,10 @@ export default function App() {
     };
   }, [session?.user?.email, session?.user?.id, refreshKey]);
 
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [location.pathname]);
+
   const handleRefresh = () => {
     setRefreshKey((prev) => prev + 1);
   };
@@ -194,6 +255,11 @@ export default function App() {
   const navigateTo = (path: string) => {
     navigate(path);
   };
+
+  const handleDrawerToggle = () => {
+    setDrawerOpen((prev) => !prev);
+  };
+
 
   const handleCreateBranch = async (input: CreateBranchInput) => {
     const branch = await addBranch(input);
@@ -278,14 +344,49 @@ export default function App() {
         <HeaderCopy>{AREA_COPY[activeArea]}</HeaderCopy>
 
         <Toolbar>
+          <MobileMenuButton type="button" onClick={handleDrawerToggle} aria-expanded={drawerOpen}>
+            <span className="hamburger" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path
+                  d="M4 7h16M4 12h16M4 17h16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </span>
+            Menú
+          </MobileMenuButton>
           <UserPill>{currentUser}</UserPill>
-          <ActionButton type="button" onClick={handleRefresh}>
+          <ActionButton type="button" onClick={handleRefresh} className="toolbar-refresh">
             Actualizar panel
           </ActionButton>
-          <ActionButton type="button" onClick={handleLogout} disabled={logoutLoading}>
+          <ActionButton type="button" onClick={handleLogout} disabled={logoutLoading} className="toolbar-logout">
             {logoutLoading ? 'Cerrando...' : 'Cerrar sesion'}
           </ActionButton>
         </Toolbar>
+
+        {drawerOpen && (
+          <MobileMenuPanel>
+            <SideMenuList>
+              {visibleAreas.map((item) => (
+                <SideMenuButton
+                  key={item.id}
+                  type="button"
+                  $active={activeArea === item.id}
+                  onClick={() => navigateTo(item.path)}
+                >
+                  <span className="menu-icon">{AREA_ICONS[item.id]}</span>
+                  <span className="menu-text">
+                    <strong>{item.label}</strong>
+                    <small>{item.description}</small>
+                  </span>
+                </SideMenuButton>
+              ))}
+            </SideMenuList>
+          </MobileMenuPanel>
+        )}
       </Header>
 
       {(displayError || authError) && (
@@ -298,6 +399,7 @@ export default function App() {
         </AlertStrip>
       )}
 
+
       <ShellLayout>
         <SideMenu>
           <SideMenuTitle>Areas</SideMenuTitle>
@@ -309,96 +411,101 @@ export default function App() {
                 $active={activeArea === item.id}
                 onClick={() => navigateTo(item.path)}
               >
-                <strong>{item.label}</strong>
-                <small>{item.description}</small>
+                <span className="menu-icon">{AREA_ICONS[item.id]}</span>
+                <span className="menu-text">
+                  <strong>{item.label}</strong>
+                  <small>{item.description}</small>
+                </span>
               </SideMenuButton>
             ))}
           </SideMenuList>
         </SideMenu>
         <MainContent>
-          <Routes>
-            <Route path="/" element={<Navigate to={defaultRoute} replace />} />
-            <Route
-              path="/dashboard"
-              element={
-                hasAreaAccess(identityRole, 'dashboard') ? (
-                  <DashboardSection refreshKey={refreshKey} />
-                ) : (
-                  <Navigate to={defaultRoute} replace />
-                )
-              }
-            />
-            <Route
-              path="/ventas"
-              element={
-                hasAreaAccess(identityRole, 'ventas') ? (
-                  <SalesSection branches={branches} refreshKey={refreshKey} onSaleCreated={handleRefresh} />
-                ) : (
-                  <Navigate to="/dashboard" replace />
-                )
-              }
-            />
-            <Route
-              path="/productos"
-              element={
-                hasAreaAccess(identityRole, 'productos') ? (
-                  <ProductsSection refreshKey={refreshKey} onProductCreated={handleRefresh} />
-                ) : (
-                  <Navigate to="/dashboard" replace />
-                )
-              }
-            />
-            <Route
-              path="/sucursales"
-              element={
-                hasAreaAccess(identityRole, 'sucursales') ? (
-                  <BranchesSection
-                    branches={branches}
-                    status={status}
-                    error={error}
-                    createStatus={createStatus}
-                    createError={createError}
-                    updateStatus={updateStatus}
-                    updateError={updateError}
-                    deleteStatus={deleteStatus}
-                    deleteError={deleteError}
-                    onCreateBranch={handleCreateBranch}
-                    onUpdateBranch={handleUpdateBranch}
-                    onDeleteBranch={handleDeleteBranch}
-                    onReload={reload}
-                  />
-                ) : (
-                  <Navigate to="/dashboard" replace />
-                )
-              }
-            />
-            <Route
-              path="/inventario"
-              element={
-                hasAreaAccess(identityRole, 'inventario') ? (
-                  <InventorySection
-                    branchId={selectedBranchId}
-                    branches={branches}
-                    onBranchChange={setSelectedBranchId}
-                    refreshKey={refreshKey}
-                  />
-                ) : (
-                  <Navigate to="/dashboard" replace />
-                )
-              }
-            />
-            <Route
-              path="/usuarios"
-              element={
-                hasAreaAccess(identityRole, 'usuarios') ? (
-                  <UsersSection authUserId={session?.user?.id ?? ''} refreshKey={refreshKey} />
-                ) : (
-                  <Navigate to="/dashboard" replace />
-                )
-              }
-            />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
+          <Suspense fallback={<StatusState kind="loading" message="Cargando modulo..." />}>
+            <Routes>
+              <Route path="/" element={<Navigate to={defaultRoute} replace />} />
+              <Route
+                path="/dashboard"
+                element={
+                  hasAreaAccess(identityRole, 'dashboard') ? (
+                    <DashboardSection refreshKey={refreshKey} />
+                  ) : (
+                    <Navigate to={defaultRoute} replace />
+                  )
+                }
+              />
+              <Route
+                path="/ventas"
+                element={
+                  hasAreaAccess(identityRole, 'ventas') ? (
+                    <SalesSection branches={branches} refreshKey={refreshKey} onSaleCreated={handleRefresh} />
+                  ) : (
+                    <Navigate to="/dashboard" replace />
+                  )
+                }
+              />
+              <Route
+                path="/productos"
+                element={
+                  hasAreaAccess(identityRole, 'productos') ? (
+                    <ProductsSection refreshKey={refreshKey} onProductCreated={handleRefresh} />
+                  ) : (
+                    <Navigate to="/dashboard" replace />
+                  )
+                }
+              />
+              <Route
+                path="/sucursales"
+                element={
+                  hasAreaAccess(identityRole, 'sucursales') ? (
+                    <BranchesSection
+                      branches={branches}
+                      status={status}
+                      error={error}
+                      createStatus={createStatus}
+                      createError={createError}
+                      updateStatus={updateStatus}
+                      updateError={updateError}
+                      deleteStatus={deleteStatus}
+                      deleteError={deleteError}
+                      onCreateBranch={handleCreateBranch}
+                      onUpdateBranch={handleUpdateBranch}
+                      onDeleteBranch={handleDeleteBranch}
+                      onReload={reload}
+                    />
+                  ) : (
+                    <Navigate to="/dashboard" replace />
+                  )
+                }
+              />
+              <Route
+                path="/inventario"
+                element={
+                  hasAreaAccess(identityRole, 'inventario') ? (
+                    <InventorySection
+                      branchId={selectedBranchId}
+                      branches={branches}
+                      onBranchChange={setSelectedBranchId}
+                      refreshKey={refreshKey}
+                    />
+                  ) : (
+                    <Navigate to="/dashboard" replace />
+                  )
+                }
+              />
+              <Route
+                path="/usuarios"
+                element={
+                  hasAreaAccess(identityRole, 'usuarios') ? (
+                    <UsersSection authUserId={session?.user?.id ?? ''} refreshKey={refreshKey} />
+                  ) : (
+                    <Navigate to="/dashboard" replace />
+                  )
+                }
+              />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </Suspense>
         </MainContent>
       </ShellLayout>
     </Page>
