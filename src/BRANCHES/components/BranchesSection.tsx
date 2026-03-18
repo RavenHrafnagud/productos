@@ -2,12 +2,13 @@
  * Seccion de sucursales.
  * Permite crear sucursales con select dependiente: pais -> ciudad -> barrio/localidad.
  */
-import { FormEvent, useMemo, useState } from 'react';
+import { type ChangeEvent, FormEvent, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { getCityOptions, getCountryOptions, getLocalityOptions } from '../data/locationCatalog';
+import { uploadBranchRutPdf } from '../api/branchRepository';
 import { formatDateTime } from '../../SHARED/utils/format';
 import { isSetupError, toFriendlySupabaseMessage } from '../../SHARED/utils/supabaseGuidance';
-import { isValidEmail, sanitizeText } from '../../SHARED/utils/validators';
+import { isValidEmail, sanitizeText, toPositiveNumber } from '../../SHARED/utils/validators';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
 import {
   ButtonsRow,
@@ -50,6 +51,9 @@ interface BranchesSectionProps {
 
 const EMPTY_FORM: CreateBranchInput = {
   nit: '',
+  rut: '',
+  rutPdfUrl: '',
+  porcentajeComision: 0,
   nombre: '',
   direccion: '',
   ciudad: '',
@@ -106,6 +110,10 @@ const TableActions = styled.div.attrs({ className: 'no-wrap' })`
   justify-content: flex-end;
 `;
 
+const FileInput = styled.input`
+  display: none;
+`;
+
 export function BranchesSection({
   branches,
   status,
@@ -123,9 +131,12 @@ export function BranchesSection({
 }: BranchesSectionProps) {
   const [form, setForm] = useState<CreateBranchInput>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
+  const [rutUploadStatus, setRutUploadStatus] = useState<'idle' | 'uploading' | 'error'>('idle');
+  const [rutUploadError, setRutUploadError] = useState<string | null>(null);
   const [editingBranchId, setEditingBranchId] = useState<string | null>(null);
   const [deletingBranchId, setDeletingBranchId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const rutFileInputRef = useRef<HTMLInputElement | null>(null);
   const friendlyLoadError = toFriendlySupabaseMessage(error, 'sucursales');
   const friendlyCreateError = toFriendlySupabaseMessage(createError, 'sucursales');
   const friendlyUpdateError = toFriendlySupabaseMessage(updateError, 'sucursales');
@@ -151,8 +162,12 @@ export function BranchesSection({
     event.preventDefault();
     setFormError(null);
 
+    const porcentajeComision = toPositiveNumber(String(form.porcentajeComision));
     const payload: CreateBranchInput = {
       nit: sanitizeText(form.nit, 30),
+      rut: sanitizeText(form.rut, 40),
+      rutPdfUrl: form.rutPdfUrl.trim(),
+      porcentajeComision: porcentajeComision ?? -1,
       nombre: sanitizeText(form.nombre, 80),
       direccion: sanitizeText(form.direccion, 140),
       ciudad: sanitizeText(form.ciudad, 80),
@@ -169,6 +184,10 @@ export function BranchesSection({
     }
     if (!payload.pais || !payload.ciudad || !payload.localidad) {
       setFormError('Debes seleccionar pais, ciudad y barrio/localidad.');
+      return;
+    }
+    if (porcentajeComision === null || porcentajeComision < 0 || porcentajeComision > 100) {
+      setFormError('El porcentaje de comision debe estar entre 0 y 100.');
       return;
     }
     if (payload.email && !isValidEmail(payload.email)) {
@@ -191,9 +210,14 @@ export function BranchesSection({
 
   const handleStartEditBranch = (branch: Branch) => {
     setFormError(null);
+    setRutUploadError(null);
+    setRutUploadStatus('idle');
     setEditingBranchId(branch.id);
     setForm({
       nit: branch.nit,
+      rut: branch.rut ?? '',
+      rutPdfUrl: branch.rutPdfUrl ?? '',
+      porcentajeComision: branch.porcentajeComision,
       nombre: branch.nombre,
       direccion: branch.direccion ?? '',
       ciudad: branch.ciudad ?? '',
@@ -209,6 +233,30 @@ export function BranchesSection({
     setEditingBranchId(null);
     setFormError(null);
     setForm(EMPTY_FORM);
+    setRutUploadStatus('idle');
+    setRutUploadError(null);
+  };
+
+  const handleSelectRutFile = () => {
+    rutFileInputRef.current?.click();
+  };
+
+  const handleUploadRutFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.currentTarget.value = '';
+    if (!file) return;
+
+    setRutUploadStatus('uploading');
+    setRutUploadError(null);
+    try {
+      const reference = form.nit || form.nombre || 'sucursal';
+      const publicUrl = await uploadBranchRutPdf(file, reference);
+      setForm((prev) => ({ ...prev, rutPdfUrl: publicUrl }));
+      setRutUploadStatus('idle');
+    } catch (err) {
+      setRutUploadStatus('error');
+      setRutUploadError(err instanceof Error ? err.message : 'No se pudo subir el PDF RUT.');
+    }
   };
 
   const handleDeleteBranch = async (branch: Branch) => {
@@ -272,11 +320,31 @@ export function BranchesSection({
                 />
               </Field>
               <Field>
+                RUT
+                <InputControl
+                  value={form.rut}
+                  onChange={(event) => setForm((prev) => ({ ...prev, rut: event.target.value }))}
+                  placeholder="Ej: 900123456-7"
+                />
+              </Field>
+              <Field>
                 Nombre comercial
                 <InputControl
                   value={form.nombre}
                   onChange={(event) => setForm((prev) => ({ ...prev, nombre: event.target.value }))}
                   placeholder="Ej: Sede Centro"
+                  required
+                />
+              </Field>
+              <Field>
+                Porcentaje de comision
+                <InputControl
+                  inputMode="decimal"
+                  value={Number.isFinite(form.porcentajeComision) ? String(form.porcentajeComision) : ''}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, porcentajeComision: Number(event.target.value) }))
+                  }
+                  placeholder="Ej: 25"
                   required
                 />
               </Field>
@@ -378,12 +446,35 @@ export function BranchesSection({
                   <option value="INACTIVO">Inactivo</option>
                 </SelectControl>
               </Field>
+              <Field>
+                PDF RUT
+                <ButtonsRow>
+                  <GhostButton
+                    type="button"
+                    onClick={handleSelectRutFile}
+                    disabled={rutUploadStatus === 'uploading'}
+                  >
+                    {rutUploadStatus === 'uploading' ? 'Subiendo PDF...' : 'Subir PDF RUT'}
+                  </GhostButton>
+                  {form.rutPdfUrl && (
+                    <GhostButton type="button" as="a" href={form.rutPdfUrl} target="_blank" rel="noreferrer">
+                      Ver PDF
+                    </GhostButton>
+                  )}
+                </ButtonsRow>
+                <FileInput
+                  ref={rutFileInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleUploadRutFile}
+                />
+              </Field>
             </Fields>
 
-            {(formError || friendlyCreateError) && (
+            {(formError || friendlyCreateError || rutUploadError) && (
               <StatusState
-                kind={formError ? 'error' : isSetupError(createError) ? 'info' : 'error'}
-                message={formError ?? friendlyCreateError ?? 'Error inesperado.'}
+                kind={formError || rutUploadError ? 'error' : isSetupError(createError) ? 'info' : 'error'}
+                message={formError ?? rutUploadError ?? friendlyCreateError ?? 'Error inesperado.'}
               />
             )}
             {friendlyUpdateError && (
@@ -435,10 +526,13 @@ export function BranchesSection({
                 <thead>
                   <tr>
                     <th className="hide-mobile">NIT</th>
+                    <th className="hide-mobile">RUT</th>
                     <th>Sucursal</th>
                     <th className="hide-mobile">Pais</th>
                     <th>Ciudad</th>
                     <th className="hide-mobile">Barrio/Localidad</th>
+                    <th className="num">Comision %</th>
+                    <th className="hide-mobile">PDF RUT</th>
                     <th className="hide-mobile">Direccion</th>
                     <th className="hide-mobile">Telefono</th>
                     <th className="hide-mobile">Email</th>
@@ -451,10 +545,21 @@ export function BranchesSection({
                   {branches.map((branch) => (
                     <tr key={branch.id}>
                       <td className="hide-mobile">{branch.nit}</td>
+                      <td className="hide-mobile">{branch.rut ?? 'Sin RUT'}</td>
                       <td>{branch.nombre}</td>
                       <td className="hide-mobile">{branch.pais}</td>
                       <td>{branch.ciudad ?? 'Sin ciudad'}</td>
                       <td className="hide-mobile">{branch.localidad ?? 'Sin localidad'}</td>
+                      <td className="num">{branch.porcentajeComision.toFixed(2)}%</td>
+                      <td className="hide-mobile">
+                        {branch.rutPdfUrl ? (
+                          <GhostButton as="a" href={branch.rutPdfUrl} target="_blank" rel="noreferrer">
+                            Ver PDF
+                          </GhostButton>
+                        ) : (
+                          'Sin PDF'
+                        )}
+                      </td>
                       <td className="hide-mobile">{branch.direccion ?? 'Sin direccion'}</td>
                       <td className="hide-mobile">{branch.telefono ?? 'Sin telefono'}</td>
                       <td className="hide-mobile">{branch.email ?? 'Sin email'}</td>

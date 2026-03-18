@@ -12,6 +12,7 @@ const SCHEMA_MISSING_PATTERNS = [
 const PERMISSION_PATTERNS = [/permission denied/i, /not authorized/i, /new row violates row-level security/i];
 
 type GuidanceContext = 'sucursales' | 'productos' | 'inventario' | 'ventas' | 'usuarios' | 'dashboard' | 'general';
+type ExtendedGuidanceContext = GuidanceContext | 'envios';
 
 function matchesAny(value: string, patterns: RegExp[]) {
   return patterns.some((pattern) => pattern.test(value));
@@ -29,7 +30,7 @@ export function isPermissionError(rawError: string | null | undefined) {
 
 export function toFriendlySupabaseMessage(
   rawError: string | null | undefined,
-  context: GuidanceContext,
+  context: ExtendedGuidanceContext,
 ) {
   if (!rawError) return null;
 
@@ -78,6 +79,9 @@ export function toFriendlySupabaseMessage(
     if (context === 'ventas') {
       return 'Crea primero ventas y valida que el esquema ventas este expuesto en Data API.';
     }
+    if (context === 'envios') {
+      return 'Configura primero la tabla ventas.envios y sus politicas. Ejecuta database/024_envios_logistica_y_sucursales.sql en Supabase.';
+    }
     if (context === 'usuarios') {
       return 'Valida primero el esquema identidad y ejecuta database/013_refactor_identidad_estado_roles.sql, database/015_identity_admin_management_rpc.sql, database/016_session_identity_link_and_permissions.sql, database/018_identity_snapshot_rpc.sql y database/020_update_identity_user_profile.sql.';
     }
@@ -99,6 +103,9 @@ export function toFriendlySupabaseMessage(
     }
     if (context === 'ventas') {
       return 'No tienes permisos para gestionar ventas. Ejecuta database/019_role_based_permissions.sql o revisa RLS del esquema ventas.';
+    }
+    if (context === 'envios') {
+      return 'No tienes permisos para gestionar envios. Ejecuta database/024_envios_logistica_y_sucursales.sql y revisa RLS del esquema ventas.';
     }
     if (context === 'usuarios') {
       return 'No tienes permisos para gestionar identidad (usuarios/roles). Verifica que tu usuario tenga rol admin y ejecuta database/015_identity_admin_management_rpc.sql.';

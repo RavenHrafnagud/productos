@@ -146,7 +146,7 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
     }
 
     if (precioVenta === null) {
-      setFormError('El precio de venta debe ser numerico y mayor o igual a cero.');
+      setFormError('El precio de venta publica debe ser numerico y mayor o igual a cero.');
       return;
     }
 
@@ -238,7 +238,7 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
               <strong>{summary.inactive}</strong>
             </SummaryCard>
             <SummaryCard>
-              <p>Con codigo</p>
+              <p>Con codigo/ISBN</p>
               <strong>{summary.withBarcode}</strong>
             </SummaryCard>
           </SummaryGrid>
@@ -255,7 +255,7 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
                 />
               </Field>
               <Field>
-                Codigo de barra (opcional)
+                Codigo de barra o ISBN (opcional)
                 <InputControl
                   value={form.codigoBarra}
                   onChange={(event) => setForm((prev) => ({ ...prev, codigoBarra: event.target.value }))}
@@ -263,7 +263,7 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
                 />
               </Field>
               <Field>
-                Precio de venta
+                Precio de venta publica
                 <InputControl
                   inputMode="decimal"
                   value={form.precioVenta}
@@ -357,8 +357,8 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
                 <thead>
                   <tr>
                     <th>Producto</th>
-                    <th className="hide-mobile">Codigo</th>
-                    <th className="num">Venta</th>
+                    <th className="hide-mobile">Codigo/ISBN</th>
+                    <th className="num">Venta publica</th>
                     <th>Estado</th>
                     <th className="hide-mobile">Actualizado</th>
                     <th className="actions">Acciones</th>
@@ -368,7 +368,7 @@ export function ProductsSection({ refreshKey, onProductCreated }: ProductsSectio
                   {products.map((product) => (
                     <tr key={product.id}>
                       <td>{product.nombre}</td>
-                      <td className="hide-mobile">{product.codigoBarra ?? 'Sin codigo'}</td>
+                      <td className="hide-mobile">{product.codigoBarra ?? 'Sin codigo/ISBN'}</td>
                       <td className="num">{formatMoney(product.precioVenta)}</td>
                       <td>
                         <Tag $tone={product.estado ? 'ok' : 'off'}>

@@ -4,6 +4,9 @@
 export interface Branch {
   id: string;
   nit: string;
+  rut: string | null;
+  rutPdfUrl: string | null;
+  porcentajeComision: number;
   nombre: string;
   direccion: string | null;
   ciudad: string | null;
@@ -20,6 +23,9 @@ export interface Branch {
  */
 export interface CreateBranchInput {
   nit: string;
+  rut: string;
+  rutPdfUrl: string;
+  porcentajeComision: number;
   nombre: string;
   direccion: string;
   ciudad: string;

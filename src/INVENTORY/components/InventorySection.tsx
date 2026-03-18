@@ -32,6 +32,7 @@ import {
 } from '../../SHARED/ui/SectionCard';
 import { StatusState } from '../../SHARED/ui/StatusState';
 import { useInventory } from '../hooks/useInventory';
+import { useShipments } from '../../SHIPMENTS/hooks/useShipments';
 
 interface InventorySectionProps {
   branchId: string;
@@ -182,6 +183,7 @@ const BranchCard = styled.button<{ $active?: boolean; $disabled?: boolean }>`
 
 export function InventorySection({ branchId, branches, onBranchChange, refreshKey }: InventorySectionProps) {
   const { products } = useProducts(refreshKey);
+  const { shipments } = useShipments(refreshKey);
   const {
     inventory,
     movements,
@@ -231,11 +233,32 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
   );
   const summary = useMemo(() => {
     const total = inventory.length;
-    const lowStock = inventory.filter((item) => item.cantidadActual <= item.cantidadMinima).length;
+    const inTransitByProduct = new Map<string, number>();
+    for (const shipment of shipments) {
+      if (!shipment.localId || shipment.localId !== branchId) continue;
+      if (shipment.estadoEnvio === 'ENTREGADO') continue;
+      const currentQty = inTransitByProduct.get(shipment.productoId) ?? 0;
+      inTransitByProduct.set(shipment.productoId, currentQty + shipment.cantidad);
+    }
+
+    const lowStock = inventory.filter((item) => {
+      const inTransit = inTransitByProduct.get(item.productoId) ?? 0;
+      return item.cantidadActual + inTransit <= item.cantidadMinima;
+    }).length;
+    const inTransitTotal = [...inTransitByProduct.values()].reduce((sum, qty) => sum + qty, 0);
     const healthy = total - lowStock;
     const movimientos = movements.length;
-    return { total, lowStock, healthy, movimientos };
-  }, [inventory, movements]);
+    return { total, lowStock, healthy, movimientos, inTransitTotal, inTransitByProduct };
+  }, [branchId, inventory, movements, shipments]);
+
+  const lowStockItems = useMemo(
+    () =>
+      inventory.filter((item) => {
+        const inTransit = summary.inTransitByProduct.get(item.productoId) ?? 0;
+        return item.cantidadActual + inTransit <= item.cantidadMinima;
+      }),
+    [inventory, summary.inTransitByProduct],
+  );
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -349,10 +372,24 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
           <strong>{summary.lowStock}</strong>
         </SummaryCard>
         <SummaryCard>
+          <p>En transito</p>
+          <strong>{summary.inTransitTotal.toFixed(2)}</strong>
+        </SummaryCard>
+        <SummaryCard>
           <p>Movimientos</p>
           <strong>{summary.movimientos}</strong>
         </SummaryCard>
           </SummaryGrid>
+
+          {summary.lowStock > 0 && (
+            <StatusState
+              kind="info"
+              message={`Alerta de stock bajo: ${lowStockItems
+                .slice(0, 4)
+                .map((item) => item.productoNombre)
+                .join(', ')}${lowStockItems.length > 4 ? ' ...' : ''}.`}
+            />
+          )}
 
       <BranchPanel>
         <BranchPanelHeader>
@@ -496,6 +533,7 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
                     <th>Producto</th>
                     <th className="hide-mobile">Codigo</th>
                     <th className="num">Disponible</th>
+                    <th className="num hide-mobile">Transito</th>
                     <th className="num">Minimo</th>
                     <th>Estado</th>
                     <th className="hide-mobile">Actualizado</th>
@@ -504,12 +542,14 @@ export function InventorySection({ branchId, branches, onBranchChange, refreshKe
                 </thead>
                 <tbody>
                   {inventory.map((item) => {
-                    const lowStock = item.cantidadActual <= item.cantidadMinima;
+                    const inTransit = summary.inTransitByProduct.get(item.productoId) ?? 0;
+                    const lowStock = item.cantidadActual + inTransit <= item.cantidadMinima;
                     return (
                       <tr key={item.id}>
                         <td>{item.productoNombre}</td>
                         <td className="hide-mobile">{item.codigoBarra ?? 'Sin codigo'}</td>
                         <td className="num">{item.cantidadActual}</td>
+                        <td className="num hide-mobile">{inTransit.toFixed(2)}</td>
                         <td className="num">{item.cantidadMinima}</td>
                         <td>
                           <Tag $tone={lowStock ? 'warn' : 'ok'}>{lowStock ? 'Bajo' : 'Estable'}</Tag>

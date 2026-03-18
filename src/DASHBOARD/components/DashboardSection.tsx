@@ -1,11 +1,14 @@
 /**
  * Dashboard principal.
- * Resume ventas por fechas, productos y sucursales.
+ * Consolida ventas + envios para analisis de rentabilidad por canal.
  */
 import { useMemo, useState } from 'react';
 import styled from 'styled-components';
+import { useBranches } from '../../BRANCHES/hooks/useBranches';
+import { useSales } from '../../SALES/hooks/useSales';
+import { useShipments } from '../../SHIPMENTS/hooks/useShipments';
 import { DataTable, TableWrap } from '../../SHARED/ui/DataTable';
-import { Field, Fields, InputControl } from '../../SHARED/ui/FormControls';
+import { Field, Fields, InputControl, SelectControl } from '../../SHARED/ui/FormControls';
 import {
   SectionCard,
   SectionHeader,
@@ -17,10 +20,27 @@ import {
 import { StatusState } from '../../SHARED/ui/StatusState';
 import { formatMoney } from '../../SHARED/utils/format';
 import { isSetupError, toFriendlySupabaseMessage } from '../../SHARED/utils/supabaseGuidance';
-import { useSales } from '../../SALES/hooks/useSales';
 
 interface DashboardSectionProps {
   refreshKey: number;
+}
+
+type SalesChannelFilter = 'TODOS' | 'TIENDA' | 'DIRECTO';
+
+interface CommercialRecord {
+  id: string;
+  source: 'VENTA' | 'ENVIO';
+  channel: 'TIENDA' | 'DIRECTO';
+  date: string;
+  branchId: string | null;
+  branchName: string;
+  productId: string | null;
+  productName: string;
+  units: number;
+  gross: number;
+  commission: number;
+  shippingCost: number;
+  net: number;
 }
 
 function toDateInputValue(date: Date) {
@@ -29,11 +49,19 @@ function toDateInputValue(date: Date) {
 
 const MetricsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
   margin-top: 10px;
 
-  @media (max-width: 860px) {
+  @media (max-width: 1200px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  @media (max-width: 760px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 520px) {
     grid-template-columns: 1fr;
   }
 `;
@@ -41,20 +69,20 @@ const MetricsGrid = styled.div`
 const MetricCard = styled.article`
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
-  padding: 14px;
+  padding: 12px;
   background: linear-gradient(135deg, #ffffff 0%, #f6f0ff 100%);
   box-shadow: 0 12px 22px rgba(37, 24, 62, 0.1);
 
   p {
     margin: 0;
     color: var(--text-muted);
-    font-size: 0.82rem;
+    font-size: 0.78rem;
   }
 
   strong {
     margin-top: 4px;
     display: block;
-    font-size: 1.12rem;
+    font-size: 1.02rem;
   }
 `;
 
@@ -121,76 +149,183 @@ const BarFill = styled.div<{ $ratio: number; $tone?: 'main' | 'warn' | 'muted' }
 `;
 
 export function DashboardSection({ refreshKey }: DashboardSectionProps) {
-  const { sales, status, error } = useSales(refreshKey);
-  const friendlyLoadError = toFriendlySupabaseMessage(error, 'dashboard');
+  const { branches, status: branchesStatus, error: branchesError } = useBranches(refreshKey);
+  const { sales, status: salesStatus, error: salesError } = useSales(refreshKey);
+  const { shipments, status: shipmentsStatus, error: shipmentsError } = useShipments(refreshKey);
+
   const [fromDate, setFromDate] = useState(() => toDateInputValue(new Date(Date.now() - 1000 * 60 * 60 * 24 * 30)));
   const [toDate, setToDate] = useState(() => toDateInputValue(new Date()));
+  const [channelFilter, setChannelFilter] = useState<SalesChannelFilter>('TODOS');
+  const [branchFilter, setBranchFilter] = useState<string>('TODAS');
+  const [productFilter, setProductFilter] = useState<string>('TODOS');
   const [collapsed, setCollapsed] = useState(false);
 
-  const filteredSales = useMemo(() => {
+  const friendlySalesError = toFriendlySupabaseMessage(salesError, 'dashboard');
+  const friendlyShipmentsError = toFriendlySupabaseMessage(shipmentsError, 'envios');
+  const friendlyBranchesError = toFriendlySupabaseMessage(branchesError, 'sucursales');
+
+  const branchCommissionById = useMemo(
+    () => new Map(branches.map((branch) => [branch.id, branch.porcentajeComision])),
+    [branches],
+  );
+  const branchNameById = useMemo(
+    () => new Map(branches.map((branch) => [branch.id, branch.nombre])),
+    [branches],
+  );
+
+  const records = useMemo<CommercialRecord[]>(() => {
+    const fromSales: CommercialRecord[] = sales.map((sale) => {
+      const commissionPct = branchCommissionById.get(sale.localId) ?? 0;
+      const gross = sale.total;
+      const commission = (gross * commissionPct) / 100;
+      return {
+        id: `VENTA-${sale.id}`,
+        source: 'VENTA',
+        channel: 'TIENDA',
+        date: sale.fecha,
+        branchId: sale.localId,
+        branchName: sale.localNombre,
+        productId: sale.productoId,
+        productName: sale.productoNombre,
+        units: sale.cantidad,
+        gross,
+        commission,
+        shippingCost: 0,
+        net: gross - commission,
+      };
+    });
+
+    const fromShipments: CommercialRecord[] = shipments.map((shipment) => ({
+      id: `ENVIO-${shipment.id}`,
+      source: 'ENVIO',
+      channel: shipment.canalVenta,
+      date: shipment.fechaEnvio,
+      branchId: shipment.localId,
+      branchName: shipment.localNombre,
+      productId: shipment.productoId,
+      productName: shipment.productoNombre,
+      units: shipment.cantidad,
+      gross: shipment.ingresoBruto,
+      commission: shipment.comisionValor,
+      shippingCost: shipment.costoEnvio,
+      net: shipment.gananciaNeta,
+    }));
+
+    return [...fromSales, ...fromShipments];
+  }, [branchCommissionById, sales, shipments]);
+
+  const productOptions = useMemo(
+    () =>
+      [...new Map(records.map((item) => [item.productId ?? item.productName, item.productName])).entries()]
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'es')),
+    [records],
+  );
+
+  const branchOptions = useMemo(
+    () =>
+      [...new Map(records.map((item) => [item.branchId ?? 'SIN_SUCURSAL', item.branchName])).entries()]
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'es')),
+    [records],
+  );
+
+  const filteredRecords = useMemo(() => {
     const fromTs = new Date(`${fromDate}T00:00:00`).getTime();
     const toTs = new Date(`${toDate}T23:59:59`).getTime();
-    return sales.filter((sale) => {
-      const saleTs = new Date(sale.fecha).getTime();
-      return saleTs >= fromTs && saleTs <= toTs;
+    return records.filter((record) => {
+      const recordTs = new Date(record.date).getTime();
+      if (recordTs < fromTs || recordTs > toTs) return false;
+      if (channelFilter !== 'TODOS' && record.channel !== channelFilter) return false;
+      if (branchFilter !== 'TODAS' && (record.branchId ?? 'SIN_SUCURSAL') !== branchFilter) return false;
+      if (productFilter !== 'TODOS' && (record.productId ?? record.productName) !== productFilter) return false;
+      return true;
     });
-  }, [fromDate, sales, toDate]);
+  }, [branchFilter, channelFilter, fromDate, productFilter, records, toDate]);
 
   const totals = useMemo(() => {
-    const totalIngresos = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
-    const totalUnidades = filteredSales.reduce((sum, sale) => sum + sale.cantidad, 0);
-    const ticketPromedio = filteredSales.length > 0 ? totalIngresos / filteredSales.length : 0;
-    return { totalIngresos, totalUnidades, ticketPromedio };
-  }, [filteredSales]);
-
-  const byProduct = useMemo(() => {
-    const map = new Map<string, { nombre: string; cantidad: number; total: number }>();
-    for (const sale of filteredSales) {
-      const current = map.get(sale.productoId ?? sale.productoNombre) ?? {
-        nombre: sale.productoNombre,
-        cantidad: 0,
-        total: 0,
-      };
-      current.cantidad += sale.cantidad;
-      current.total += sale.total;
-      map.set(sale.productoId ?? sale.productoNombre, current);
-    }
-    return [...map.values()].sort((a, b) => b.total - a.total);
-  }, [filteredSales]);
-
-  const byBranch = useMemo(() => {
-    const map = new Map<string, { nombre: string; ventas: number; total: number }>();
-    for (const sale of filteredSales) {
-      const current = map.get(sale.localId) ?? { nombre: sale.localNombre, ventas: 0, total: 0 };
-      current.ventas += 1;
-      current.total += sale.total;
-      map.set(sale.localId, current);
-    }
-    return [...map.values()].sort((a, b) => b.total - a.total);
-  }, [filteredSales]);
+    const operations = filteredRecords.length;
+    const totalGross = filteredRecords.reduce((sum, item) => sum + item.gross, 0);
+    const totalUnits = filteredRecords.reduce((sum, item) => sum + item.units, 0);
+    const totalCommission = filteredRecords.reduce((sum, item) => sum + item.commission, 0);
+    const totalShipping = filteredRecords.reduce((sum, item) => sum + item.shippingCost, 0);
+    const totalNet = filteredRecords.reduce((sum, item) => sum + item.net, 0);
+    return { operations, totalGross, totalUnits, totalCommission, totalShipping, totalNet };
+  }, [filteredRecords]);
 
   const byDate = useMemo(() => {
-    const map = new Map<string, { fecha: string; ventas: number; total: number }>();
-    for (const sale of filteredSales) {
-      const dateKey = sale.fecha.slice(0, 10);
-      const current = map.get(dateKey) ?? { fecha: dateKey, ventas: 0, total: 0 };
-      current.ventas += 1;
-      current.total += sale.total;
+    const map = new Map<string, { date: string; operations: number; gross: number; commission: number; shipping: number; net: number }>();
+    for (const row of filteredRecords) {
+      const dateKey = row.date.slice(0, 10);
+      const current = map.get(dateKey) ?? { date: dateKey, operations: 0, gross: 0, commission: 0, shipping: 0, net: 0 };
+      current.operations += 1;
+      current.gross += row.gross;
+      current.commission += row.commission;
+      current.shipping += row.shippingCost;
+      current.net += row.net;
       map.set(dateKey, current);
     }
-    return [...map.values()].sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
-  }, [filteredSales]);
+    return [...map.values()].sort((a, b) => (a.date < b.date ? 1 : -1));
+  }, [filteredRecords]);
 
-  const maxByDate = useMemo(() => Math.max(...byDate.map((row) => row.total), 1), [byDate]);
-  const maxByProduct = useMemo(() => Math.max(...byProduct.map((row) => row.total), 1), [byProduct]);
-  const maxByBranch = useMemo(() => Math.max(...byBranch.map((row) => row.total), 1), [byBranch]);
+  const byProduct = useMemo(() => {
+    const map = new Map<string, { name: string; units: number; gross: number; net: number }>();
+    for (const row of filteredRecords) {
+      const key = row.productId ?? row.productName;
+      const current = map.get(key) ?? { name: row.productName, units: 0, gross: 0, net: 0 };
+      current.units += row.units;
+      current.gross += row.gross;
+      current.net += row.net;
+      map.set(key, current);
+    }
+    return [...map.values()].sort((a, b) => b.net - a.net);
+  }, [filteredRecords]);
+
+  const byBranch = useMemo(() => {
+    const map = new Map<string, { name: string; operations: number; gross: number; net: number }>();
+    for (const row of filteredRecords) {
+      const key = row.branchId ?? 'SIN_SUCURSAL';
+      const current = map.get(key) ?? {
+        name: row.branchId ? branchNameById.get(row.branchId) ?? row.branchName : 'Sin sucursal',
+        operations: 0,
+        gross: 0,
+        net: 0,
+      };
+      current.operations += 1;
+      current.gross += row.gross;
+      current.net += row.net;
+      map.set(key, current);
+    }
+    return [...map.values()].sort((a, b) => b.net - a.net);
+  }, [branchNameById, filteredRecords]);
+
+  const byChannel = useMemo(() => {
+    const map = new Map<'TIENDA' | 'DIRECTO', { channel: 'TIENDA' | 'DIRECTO'; operations: number; gross: number; net: number }>();
+    for (const row of filteredRecords) {
+      const current = map.get(row.channel) ?? { channel: row.channel, operations: 0, gross: 0, net: 0 };
+      current.operations += 1;
+      current.gross += row.gross;
+      current.net += row.net;
+      map.set(row.channel, current);
+    }
+    return [...map.values()].sort((a, b) => b.net - a.net);
+  }, [filteredRecords]);
+
+  const maxByDate = useMemo(() => Math.max(...byDate.map((row) => row.net), 1), [byDate]);
+  const maxByProduct = useMemo(() => Math.max(...byProduct.map((row) => row.net), 1), [byProduct]);
+  const maxByBranch = useMemo(() => Math.max(...byBranch.map((row) => row.net), 1), [byBranch]);
+
+  const loading = salesStatus === 'loading' || shipmentsStatus === 'loading' || branchesStatus === 'loading';
+  const hasError = Boolean(salesError || shipmentsError || branchesError);
+  const bestError = friendlySalesError ?? friendlyShipmentsError ?? friendlyBranchesError ?? 'Error inesperado.';
+  const isGuidedError = isSetupError(salesError) || isSetupError(shipmentsError) || isSetupError(branchesError);
 
   return (
     <SectionCard>
       <SectionHeader>
-        <SectionTitle>Dashboard de ventas</SectionTitle>
+        <SectionTitle>Dashboard comercial</SectionTitle>
         <SectionHeaderActions>
-          <SectionMeta>{filteredSales.length} ventas en el rango</SectionMeta>
+          <SectionMeta>{filteredRecords.length} operaciones en el rango</SectionMeta>
           <SectionToggle type="button" onClick={() => setCollapsed((prev) => !prev)} aria-expanded={!collapsed}>
             {collapsed ? 'Mostrar' : 'Ocultar'}
           </SectionToggle>
@@ -208,48 +343,88 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
               Hasta
               <InputControl type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
             </Field>
+            <Field>
+              Canal
+              <SelectControl
+                value={channelFilter}
+                onChange={(event) => setChannelFilter(event.target.value as SalesChannelFilter)}
+              >
+                <option value="TODOS">Todos</option>
+                <option value="TIENDA">Tienda</option>
+                <option value="DIRECTO">Directo</option>
+              </SelectControl>
+            </Field>
+            <Field>
+              Sucursal
+              <SelectControl value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)}>
+                <option value="TODAS">Todas</option>
+                {branchOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
+                  </option>
+                ))}
+              </SelectControl>
+            </Field>
+            <Field>
+              Producto
+              <SelectControl value={productFilter} onChange={(event) => setProductFilter(event.target.value)}>
+                <option value="TODOS">Todos</option>
+                {productOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
+                  </option>
+                ))}
+              </SelectControl>
+            </Field>
           </Fields>
 
-          {status === 'loading' && <StatusState kind="loading" message="Calculando estadisticas..." />}
-          {status === 'error' && (
-            <StatusState
-              kind={isSetupError(error) ? 'info' : 'error'}
-              message={friendlyLoadError ?? 'Error inesperado.'}
-            />
-          )}
-          {status === 'success' && sales.length === 0 && (
-            <StatusState kind="empty" message="No hay ventas en este rango. Ajusta las fechas o registra nuevas ventas." />
+          {loading && <StatusState kind="loading" message="Calculando rentabilidad consolidada..." />}
+          {hasError && <StatusState kind={isGuidedError ? 'info' : 'error'} message={bestError} />}
+          {!loading && !hasError && filteredRecords.length === 0 && (
+            <StatusState kind="empty" message="No hay operaciones para los filtros seleccionados." />
           )}
 
-          {status === 'success' && sales.length > 0 && (
+          {!loading && !hasError && filteredRecords.length > 0 && (
             <>
               <MetricsGrid>
                 <MetricCard>
-                  <p>Ingresos totales</p>
-                  <strong>{formatMoney(totals.totalIngresos)}</strong>
+                  <p>Operaciones</p>
+                  <strong>{totals.operations}</strong>
                 </MetricCard>
                 <MetricCard>
-                  <p>Unidades vendidas</p>
-                  <strong>{totals.totalUnidades}</strong>
+                  <p>Unidades</p>
+                  <strong>{totals.totalUnits.toFixed(2)}</strong>
                 </MetricCard>
                 <MetricCard>
-                  <p>Ticket promedio</p>
-                  <strong>{formatMoney(totals.ticketPromedio)}</strong>
+                  <p>Ingreso bruto</p>
+                  <strong>{formatMoney(totals.totalGross)}</strong>
+                </MetricCard>
+                <MetricCard>
+                  <p>Comisiones</p>
+                  <strong>{formatMoney(totals.totalCommission)}</strong>
+                </MetricCard>
+                <MetricCard>
+                  <p>Costos de envio</p>
+                  <strong>{formatMoney(totals.totalShipping)}</strong>
+                </MetricCard>
+                <MetricCard>
+                  <p>Ganancia neta</p>
+                  <strong>{formatMoney(totals.totalNet)}</strong>
                 </MetricCard>
               </MetricsGrid>
 
               <ChartsGrid>
                 <ChartCard>
-                  <ChartTitle>Comportamiento por fecha</ChartTitle>
+                  <ChartTitle>Ganancia neta por fecha</ChartTitle>
                   <Bars>
-                    {byDate.slice(0, 10).map((row) => (
-                      <BarItem key={row.fecha}>
+                    {byDate.slice(0, 12).map((row) => (
+                      <BarItem key={row.date}>
                         <BarLabel>
-                          <span>{row.fecha}</span>
-                          <strong>{formatMoney(row.total)}</strong>
+                          <span>{row.date}</span>
+                          <strong>{formatMoney(row.net)}</strong>
                         </BarLabel>
                         <BarTrack>
-                          <BarFill $ratio={row.total / maxByDate} />
+                          <BarFill $ratio={row.net / maxByDate} />
                         </BarTrack>
                       </BarItem>
                     ))}
@@ -257,16 +432,16 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
                 </ChartCard>
 
                 <ChartCard>
-                  <ChartTitle>Top productos por ingresos</ChartTitle>
+                  <ChartTitle>Top productos por ganancia neta</ChartTitle>
                   <Bars>
                     {byProduct.slice(0, 8).map((row) => (
-                      <BarItem key={row.nombre}>
+                      <BarItem key={row.name}>
                         <BarLabel>
-                          <span>{row.nombre}</span>
-                          <strong>{formatMoney(row.total)}</strong>
+                          <span>{row.name}</span>
+                          <strong>{formatMoney(row.net)}</strong>
                         </BarLabel>
                         <BarTrack>
-                          <BarFill $ratio={row.total / maxByProduct} $tone="warn" />
+                          <BarFill $ratio={row.net / maxByProduct} $tone="warn" />
                         </BarTrack>
                       </BarItem>
                     ))}
@@ -274,16 +449,16 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
                 </ChartCard>
 
                 <ChartCard>
-                  <ChartTitle>Top sucursales por ingresos</ChartTitle>
+                  <ChartTitle>Top sucursales por ganancia neta</ChartTitle>
                   <Bars>
                     {byBranch.slice(0, 8).map((row) => (
-                      <BarItem key={row.nombre}>
+                      <BarItem key={row.name}>
                         <BarLabel>
-                          <span>{row.nombre}</span>
-                          <strong>{formatMoney(row.total)}</strong>
+                          <span>{row.name}</span>
+                          <strong>{formatMoney(row.net)}</strong>
                         </BarLabel>
                         <BarTrack>
-                          <BarFill $ratio={row.total / maxByBranch} $tone="muted" />
+                          <BarFill $ratio={row.net / maxByBranch} $tone="muted" />
                         </BarTrack>
                       </BarItem>
                     ))}
@@ -292,23 +467,25 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
               </ChartsGrid>
 
               <SectionHeader>
-                <SectionTitle>Detalle por fecha</SectionTitle>
+                <SectionTitle>Reporte por canal</SectionTitle>
               </SectionHeader>
               <TableWrap>
                 <DataTable>
                   <thead>
                     <tr>
-                      <th>Fecha</th>
-                      <th className="num">Ventas</th>
-                      <th className="num">Total</th>
+                      <th>Canal</th>
+                      <th className="num">Operaciones</th>
+                      <th className="num">Ingreso bruto</th>
+                      <th className="num">Ganancia neta</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {byDate.map((row) => (
-                      <tr key={row.fecha}>
-                        <td>{row.fecha}</td>
-                        <td className="num">{row.ventas}</td>
-                        <td className="num">{formatMoney(row.total)}</td>
+                    {byChannel.map((row) => (
+                      <tr key={row.channel}>
+                        <td>{row.channel}</td>
+                        <td className="num">{row.operations}</td>
+                        <td className="num">{formatMoney(row.gross)}</td>
+                        <td className="num">{formatMoney(row.net)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -316,7 +493,37 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
               </TableWrap>
 
               <SectionHeader>
-                <SectionTitle>Detalle por producto</SectionTitle>
+                <SectionTitle>Rentabilidad por fecha</SectionTitle>
+              </SectionHeader>
+              <TableWrap>
+                <DataTable>
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th className="num">Operaciones</th>
+                      <th className="num">Bruto</th>
+                      <th className="num">Comision</th>
+                      <th className="num">Envio</th>
+                      <th className="num">Neta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {byDate.map((row) => (
+                      <tr key={row.date}>
+                        <td>{row.date}</td>
+                        <td className="num">{row.operations}</td>
+                        <td className="num">{formatMoney(row.gross)}</td>
+                        <td className="num">{formatMoney(row.commission)}</td>
+                        <td className="num">{formatMoney(row.shipping)}</td>
+                        <td className="num">{formatMoney(row.net)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </DataTable>
+              </TableWrap>
+
+              <SectionHeader>
+                <SectionTitle>Rentabilidad por producto</SectionTitle>
               </SectionHeader>
               <TableWrap>
                 <DataTable>
@@ -324,15 +531,17 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
                     <tr>
                       <th>Producto</th>
                       <th className="num">Unidades</th>
-                      <th className="num">Total</th>
+                      <th className="num">Bruto</th>
+                      <th className="num">Neta</th>
                     </tr>
                   </thead>
                   <tbody>
                     {byProduct.map((row) => (
-                      <tr key={row.nombre}>
-                        <td>{row.nombre}</td>
-                        <td className="num">{row.cantidad}</td>
-                        <td className="num">{formatMoney(row.total)}</td>
+                      <tr key={row.name}>
+                        <td>{row.name}</td>
+                        <td className="num">{row.units.toFixed(2)}</td>
+                        <td className="num">{formatMoney(row.gross)}</td>
+                        <td className="num">{formatMoney(row.net)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -340,23 +549,25 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
               </TableWrap>
 
               <SectionHeader>
-                <SectionTitle>Detalle por sucursal</SectionTitle>
+                <SectionTitle>Rentabilidad por sucursal</SectionTitle>
               </SectionHeader>
               <TableWrap>
                 <DataTable>
                   <thead>
                     <tr>
                       <th>Sucursal</th>
-                      <th className="num">Ventas</th>
-                      <th className="num">Total</th>
+                      <th className="num">Operaciones</th>
+                      <th className="num">Bruto</th>
+                      <th className="num">Neta</th>
                     </tr>
                   </thead>
                   <tbody>
                     {byBranch.map((row) => (
-                      <tr key={row.nombre}>
-                        <td>{row.nombre}</td>
-                        <td className="num">{row.ventas}</td>
-                        <td className="num">{formatMoney(row.total)}</td>
+                      <tr key={row.name}>
+                        <td>{row.name}</td>
+                        <td className="num">{row.operations}</td>
+                        <td className="num">{formatMoney(row.gross)}</td>
+                        <td className="num">{formatMoney(row.net)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -369,3 +580,4 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
     </SectionCard>
   );
 }
+

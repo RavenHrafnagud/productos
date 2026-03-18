@@ -8,20 +8,36 @@ import type { Branch, CreateBranchInput, UpdateBranchInput } from '../types/Bran
 
 const MAX_BRANCHES = 120;
 const BRANCH_SELECT_WITH_LOCALITY_AND_STATE =
-  'id, nit, nombre, direccion, localidad, ciudad, pais, telefono, email, estado, created_at';
+  'id, nit, rut, rut_pdf_url, porcentaje_comision, nombre, direccion, localidad, ciudad, pais, telefono, email, estado, created_at';
 const BRANCH_SELECT_WITHOUT_LOCALITY_AND_STATE =
-  'id, nit, nombre, direccion, ciudad, pais, telefono, email, estado, created_at';
+  'id, nit, rut, rut_pdf_url, porcentaje_comision, nombre, direccion, ciudad, pais, telefono, email, estado, created_at';
 const BRANCH_SELECT_WITH_LOCALITY_AND_ACTIVE =
-  'id, nit, nombre, direccion, localidad, ciudad, pais, telefono, email, activo, created_at';
+  'id, nit, rut, rut_pdf_url, porcentaje_comision, nombre, direccion, localidad, ciudad, pais, telefono, email, activo, created_at';
 const BRANCH_SELECT_WITHOUT_LOCALITY_AND_ACTIVE =
-  'id, nit, nombre, direccion, ciudad, pais, telefono, email, activo, created_at';
+  'id, nit, rut, rut_pdf_url, porcentaje_comision, nombre, direccion, ciudad, pais, telefono, email, activo, created_at';
 const BRANCH_SELECT_WITH_LOCALITY_AND_STATE_LEGACY_DATE =
-  'id, nit, nombre, direccion, localidad, ciudad, pais, telefono, email, estado, fecha_creacion';
+  'id, nit, rut, rut_pdf_url, porcentaje_comision, nombre, direccion, localidad, ciudad, pais, telefono, email, estado, fecha_creacion';
 const BRANCH_SELECT_WITHOUT_LOCALITY_AND_STATE_LEGACY_DATE =
-  'id, nit, nombre, direccion, ciudad, pais, telefono, email, estado, fecha_creacion';
+  'id, nit, rut, rut_pdf_url, porcentaje_comision, nombre, direccion, ciudad, pais, telefono, email, estado, fecha_creacion';
 const BRANCH_SELECT_WITH_LOCALITY_AND_ACTIVE_LEGACY_DATE =
-  'id, nit, nombre, direccion, localidad, ciudad, pais, telefono, email, activo, fecha_creacion';
+  'id, nit, rut, rut_pdf_url, porcentaje_comision, nombre, direccion, localidad, ciudad, pais, telefono, email, activo, fecha_creacion';
 const BRANCH_SELECT_WITHOUT_LOCALITY_AND_ACTIVE_LEGACY_DATE =
+  'id, nit, rut, rut_pdf_url, porcentaje_comision, nombre, direccion, ciudad, pais, telefono, email, activo, fecha_creacion';
+const BRANCH_SELECT_LEGACY_WITH_LOCALITY_AND_STATE =
+  'id, nit, nombre, direccion, localidad, ciudad, pais, telefono, email, estado, created_at';
+const BRANCH_SELECT_LEGACY_WITHOUT_LOCALITY_AND_STATE =
+  'id, nit, nombre, direccion, ciudad, pais, telefono, email, estado, created_at';
+const BRANCH_SELECT_LEGACY_WITH_LOCALITY_AND_ACTIVE =
+  'id, nit, nombre, direccion, localidad, ciudad, pais, telefono, email, activo, created_at';
+const BRANCH_SELECT_LEGACY_WITHOUT_LOCALITY_AND_ACTIVE =
+  'id, nit, nombre, direccion, ciudad, pais, telefono, email, activo, created_at';
+const BRANCH_SELECT_LEGACY_WITH_LOCALITY_AND_STATE_LEGACY_DATE =
+  'id, nit, nombre, direccion, localidad, ciudad, pais, telefono, email, estado, fecha_creacion';
+const BRANCH_SELECT_LEGACY_WITHOUT_LOCALITY_AND_STATE_LEGACY_DATE =
+  'id, nit, nombre, direccion, ciudad, pais, telefono, email, estado, fecha_creacion';
+const BRANCH_SELECT_LEGACY_WITH_LOCALITY_AND_ACTIVE_LEGACY_DATE =
+  'id, nit, nombre, direccion, localidad, ciudad, pais, telefono, email, activo, fecha_creacion';
+const BRANCH_SELECT_LEGACY_WITHOUT_LOCALITY_AND_ACTIVE_LEGACY_DATE =
   'id, nit, nombre, direccion, ciudad, pais, telefono, email, activo, fecha_creacion';
 const BRANCH_SELECT_ATTEMPTS = [
   BRANCH_SELECT_WITH_LOCALITY_AND_STATE,
@@ -32,11 +48,22 @@ const BRANCH_SELECT_ATTEMPTS = [
   BRANCH_SELECT_WITHOUT_LOCALITY_AND_STATE_LEGACY_DATE,
   BRANCH_SELECT_WITH_LOCALITY_AND_ACTIVE_LEGACY_DATE,
   BRANCH_SELECT_WITHOUT_LOCALITY_AND_ACTIVE_LEGACY_DATE,
+  BRANCH_SELECT_LEGACY_WITH_LOCALITY_AND_STATE,
+  BRANCH_SELECT_LEGACY_WITHOUT_LOCALITY_AND_STATE,
+  BRANCH_SELECT_LEGACY_WITH_LOCALITY_AND_ACTIVE,
+  BRANCH_SELECT_LEGACY_WITHOUT_LOCALITY_AND_ACTIVE,
+  BRANCH_SELECT_LEGACY_WITH_LOCALITY_AND_STATE_LEGACY_DATE,
+  BRANCH_SELECT_LEGACY_WITHOUT_LOCALITY_AND_STATE_LEGACY_DATE,
+  BRANCH_SELECT_LEGACY_WITH_LOCALITY_AND_ACTIVE_LEGACY_DATE,
+  BRANCH_SELECT_LEGACY_WITHOUT_LOCALITY_AND_ACTIVE_LEGACY_DATE,
 ];
 
 type BranchRow = {
   id: string;
   nit: string;
+  rut?: string | null;
+  rut_pdf_url?: string | null;
+  porcentaje_comision?: number | string | null;
   nombre: string;
   direccion: string | null;
   localidad?: string | null;
@@ -51,9 +78,20 @@ type BranchRow = {
 };
 
 function mapBranch(row: BranchRow): Branch {
+  const porcentajeRaw = row.porcentaje_comision;
+  const porcentajeComision =
+    porcentajeRaw === null || porcentajeRaw === undefined
+      ? 0
+      : typeof porcentajeRaw === 'number'
+        ? porcentajeRaw
+        : Number(porcentajeRaw);
+
   return {
     id: row.id,
     nit: row.nit,
+    rut: row.rut ?? null,
+    rutPdfUrl: row.rut_pdf_url ?? null,
+    porcentajeComision: Number.isFinite(porcentajeComision) ? porcentajeComision : 0,
     nombre: row.nombre,
     direccion: row.direccion,
     ciudad: row.ciudad,
@@ -67,7 +105,7 @@ function mapBranch(row: BranchRow): Branch {
 }
 
 function isCompatibilityColumnError(rawError: string) {
-  return /does not exist/i.test(rawError) && /(localidad|estado|activo|created_at|fecha_creacion)/i.test(rawError);
+  return /does not exist/i.test(rawError) && /(localidad|estado|activo|created_at|fecha_creacion|rut|rut_pdf_url|porcentaje_comision)/i.test(rawError);
 }
 
 function isMissingRelationError(error: { code?: string | null; message: string }) {
@@ -76,6 +114,39 @@ function isMissingRelationError(error: { code?: string | null; message: string }
 
 function isMissingRpcFunctionError(error: { code?: string | null; message: string }) {
   return error.code === 'PGRST202' || /Could not find the function/i.test(error.message);
+}
+
+export async function uploadBranchRutPdf(file: File, branchReference: string) {
+  if (!file) {
+    throw new Error('Debes seleccionar un archivo PDF.');
+  }
+  if (file.type !== 'application/pdf') {
+    throw new Error('El archivo del RUT debe estar en formato PDF.');
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    throw new Error('El PDF del RUT supera el limite de 8MB.');
+  }
+
+  const supabase = getSupabaseClient();
+  const normalizedReference =
+    sanitizeText(branchReference, 40).replace(/\s+/g, '-').toLowerCase() || 'sucursal';
+  const filePath = `rut-sucursales/${normalizedReference}-${Date.now()}.pdf`;
+
+  const uploadResult = await supabase.storage.from('branch-rut-documents').upload(filePath, file, {
+    upsert: true,
+    contentType: 'application/pdf',
+  });
+
+  if (uploadResult.error) {
+    throw new Error(`[BRANCHES] ${uploadResult.error.message}`);
+  }
+
+  const { data } = supabase.storage.from('branch-rut-documents').getPublicUrl(filePath);
+  if (!data.publicUrl) {
+    throw new Error('[BRANCHES] No fue posible obtener la URL publica del PDF RUT.');
+  }
+
+  return data.publicUrl;
 }
 
 async function findBranchById(supabase: ReturnType<typeof getSupabaseClient>, branchId: string) {
@@ -141,6 +212,9 @@ export async function createBranch(input: CreateBranchInput) {
 
   const payload = {
     nit: sanitizeText(input.nit, 30),
+    rut: sanitizeText(input.rut, 40) || null,
+    rut_pdf_url: input.rutPdfUrl.trim() || null,
+    porcentaje_comision: input.porcentajeComision,
     nombre: sanitizeText(input.nombre, 80),
     direccion: sanitizeText(input.direccion, 140) || null,
     ciudad: sanitizeText(input.ciudad, 80) || null,
@@ -151,11 +225,76 @@ export async function createBranch(input: CreateBranchInput) {
     estado: input.estado,
   };
 
-  if (!payload.nit || !payload.nombre || !payload.ciudad || !payload.localidad || !payload.pais) {
-    throw new Error('NIT, nombre, pais, ciudad y barrio/localidad son obligatorios.');
+  if (
+    !payload.nit ||
+    !payload.nombre ||
+    !payload.ciudad ||
+    !payload.localidad ||
+    !payload.pais ||
+    !Number.isFinite(payload.porcentaje_comision) ||
+    payload.porcentaje_comision < 0 ||
+    payload.porcentaje_comision > 100
+  ) {
+    throw new Error(
+      'NIT, nombre, pais, ciudad, barrio/localidad y porcentaje de comision (0 a 100) son obligatorios.',
+    );
   }
 
-  const insertAttempts: Array<Record<string, string | boolean | null>> = [
+  const insertAttempts: Array<Record<string, string | number | boolean | null>> = [
+    {
+      nit: payload.nit,
+      rut: payload.rut,
+      rut_pdf_url: payload.rut_pdf_url,
+      porcentaje_comision: payload.porcentaje_comision,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      localidad: payload.localidad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      estado: payload.estado,
+    },
+    {
+      nit: payload.nit,
+      rut: payload.rut,
+      rut_pdf_url: payload.rut_pdf_url,
+      porcentaje_comision: payload.porcentaje_comision,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      estado: payload.estado,
+    },
+    {
+      nit: payload.nit,
+      rut: payload.rut,
+      rut_pdf_url: payload.rut_pdf_url,
+      porcentaje_comision: payload.porcentaje_comision,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      localidad: payload.localidad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      activo: payload.estado,
+    },
+    {
+      nit: payload.nit,
+      rut: payload.rut,
+      rut_pdf_url: payload.rut_pdf_url,
+      porcentaje_comision: payload.porcentaje_comision,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      activo: payload.estado,
+    },
     {
       nit: payload.nit,
       nombre: payload.nombre,
@@ -237,6 +376,9 @@ export async function updateBranch(branchId: string, input: UpdateBranchInput) {
 
   const payload = {
     nit: sanitizeText(input.nit, 30),
+    rut: sanitizeText(input.rut, 40) || null,
+    rut_pdf_url: input.rutPdfUrl.trim() || null,
+    porcentaje_comision: input.porcentajeComision,
     nombre: sanitizeText(input.nombre, 80),
     direccion: sanitizeText(input.direccion, 140) || null,
     ciudad: sanitizeText(input.ciudad, 80) || null,
@@ -247,11 +389,76 @@ export async function updateBranch(branchId: string, input: UpdateBranchInput) {
     estado: input.estado,
   };
 
-  if (!payload.nit || !payload.nombre || !payload.ciudad || !payload.localidad || !payload.pais) {
-    throw new Error('NIT, nombre, pais, ciudad y barrio/localidad son obligatorios.');
+  if (
+    !payload.nit ||
+    !payload.nombre ||
+    !payload.ciudad ||
+    !payload.localidad ||
+    !payload.pais ||
+    !Number.isFinite(payload.porcentaje_comision) ||
+    payload.porcentaje_comision < 0 ||
+    payload.porcentaje_comision > 100
+  ) {
+    throw new Error(
+      'NIT, nombre, pais, ciudad, barrio/localidad y porcentaje de comision (0 a 100) son obligatorios.',
+    );
   }
 
-  const updateAttempts: Array<Record<string, string | boolean | null>> = [
+  const updateAttempts: Array<Record<string, string | number | boolean | null>> = [
+    {
+      nit: payload.nit,
+      rut: payload.rut,
+      rut_pdf_url: payload.rut_pdf_url,
+      porcentaje_comision: payload.porcentaje_comision,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      localidad: payload.localidad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      estado: payload.estado,
+    },
+    {
+      nit: payload.nit,
+      rut: payload.rut,
+      rut_pdf_url: payload.rut_pdf_url,
+      porcentaje_comision: payload.porcentaje_comision,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      estado: payload.estado,
+    },
+    {
+      nit: payload.nit,
+      rut: payload.rut,
+      rut_pdf_url: payload.rut_pdf_url,
+      porcentaje_comision: payload.porcentaje_comision,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      localidad: payload.localidad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      activo: payload.estado,
+    },
+    {
+      nit: payload.nit,
+      rut: payload.rut,
+      rut_pdf_url: payload.rut_pdf_url,
+      porcentaje_comision: payload.porcentaje_comision,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      ciudad: payload.ciudad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      activo: payload.estado,
+    },
     {
       nit: payload.nit,
       nombre: payload.nombre,

@@ -456,8 +456,9 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
                 <InputControl
                   inputMode="decimal"
                   value={form.precioUnitario}
-                  onChange={(event) => setForm((prev) => ({ ...prev, precioUnitario: event.target.value }))}
+                  readOnly
                   placeholder="Ej: 90000"
+                  title="Se define automaticamente segun el producto seleccionado."
                   required
                 />
               </Field>

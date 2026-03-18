@@ -87,6 +87,9 @@ export interface Database {
         {
           id: string;
           nit: string;
+          rut: string | null;
+          rut_pdf_url: string | null;
+          porcentaje_comision: number;
           nombre: string;
           direccion: string | null;
           localidad: string | null;
@@ -100,6 +103,9 @@ export interface Database {
         {
           id?: string;
           nit: string;
+          rut?: string | null;
+          rut_pdf_url?: string | null;
+          porcentaje_comision?: number;
           nombre: string;
           direccion?: string | null;
           localidad?: string | null;
@@ -179,6 +185,45 @@ export interface Database {
           estado?: 'BORRADOR' | 'CONFIRMADA' | 'ANULADA';
           total?: number;
           moneda?: string;
+        }
+      >;
+      envios: TableShape<
+        {
+          id: string;
+          local_id: string | null;
+          usuario_id: string;
+          producto_id: string;
+          destinatario: string;
+          tipo_destino: 'TIENDA' | 'CLIENTE' | 'DISTRIBUIDOR' | 'LOCAL';
+          canal_venta: 'TIENDA' | 'DIRECTO';
+          cantidad: number;
+          precio_unitario: number;
+          costo_envio: number;
+          comision_porcentaje: number;
+          estado_envio: 'PENDIENTE' | 'ENVIADO' | 'ENTREGADO';
+          fecha_envio: string;
+          observaciones: string | null;
+          ingreso_bruto: number;
+          comision_valor: number;
+          ganancia_neta: number;
+          created_at: string;
+          updated_at: string;
+        },
+        {
+          id?: string;
+          local_id?: string | null;
+          usuario_id: string;
+          producto_id: string;
+          destinatario: string;
+          tipo_destino: 'TIENDA' | 'CLIENTE' | 'DISTRIBUIDOR' | 'LOCAL';
+          canal_venta?: 'TIENDA' | 'DIRECTO';
+          cantidad: number;
+          precio_unitario: number;
+          costo_envio?: number;
+          comision_porcentaje?: number;
+          estado_envio?: 'PENDIENTE' | 'ENVIADO' | 'ENTREGADO';
+          fecha_envio?: string;
+          observaciones?: string | null;
         }
       >;
     };

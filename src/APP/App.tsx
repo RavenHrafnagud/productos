@@ -26,6 +26,11 @@ const UsersSection = lazy(() =>
     default: module.UsersSection,
   })),
 );
+const ShipmentsSection = lazy(() =>
+  import('../SHIPMENTS/components/ShipmentsSection').then((module) => ({
+    default: module.ShipmentsSection,
+  })),
+);
 import {
   ActionButton,
   AlertStrip,
@@ -46,12 +51,13 @@ import {
   UserPill,
 } from './styles/AppShell.styles';
 
-type AppArea = 'dashboard' | 'ventas' | 'productos' | 'sucursales' | 'inventario' | 'usuarios';
+type AppArea = 'dashboard' | 'ventas' | 'envios' | 'productos' | 'sucursales' | 'inventario' | 'usuarios';
 type UserRole = 'administrador' | 'gerente' | 'usuario' | null;
 
 const AREA_MENU: Array<{ id: AppArea; path: string; label: string; description: string }> = [
   { id: 'dashboard', path: '/dashboard', label: 'Dashboard', description: 'Indicadores de venta y rendimiento comercial.' },
   { id: 'ventas', path: '/ventas', label: 'Ventas', description: 'Registro e historial de ventas por sucursal.' },
+  { id: 'envios', path: '/envios', label: 'Envios', description: 'Despachos, comisiones por tienda y margen neto.' },
   { id: 'productos', path: '/productos', label: 'Productos', description: 'Catalogo, precios y estado de articulos.' },
   { id: 'sucursales', path: '/sucursales', label: 'Sucursales', description: 'Gestion de sedes y cobertura geografica.' },
   { id: 'inventario', path: '/inventario', label: 'Inventario', description: 'Existencias, ajustes y movimientos.' },
@@ -72,6 +78,14 @@ const AREA_ICONS: Record<AppArea, ReactElement> = {
       <circle cx="8" cy="9" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
       <circle cx="15.5" cy="13.5" r="4" fill="none" stroke="currentColor" strokeWidth="1.5" />
       <path d="M6.8 9h2.4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  ),
+  envios: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3.5 8.5h11l2.8 3.8v5.2H3.5z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M14.5 8.5h3.3L21 12.3v5.2h-3.7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <circle cx="7.5" cy="18" r="1.8" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="16.8" cy="18" r="1.8" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   ),
   productos: (
@@ -107,6 +121,7 @@ const AREA_ICONS: Record<AppArea, ReactElement> = {
 const AREA_TITLES: Record<AppArea, string> = {
   dashboard: 'Dashboard comercial',
   ventas: 'Modulo de ventas',
+  envios: 'Modulo de envios',
   productos: 'Modulo de productos',
   sucursales: 'Modulo de sucursales',
   inventario: 'Modulo de inventario',
@@ -116,6 +131,7 @@ const AREA_TITLES: Record<AppArea, string> = {
 const AREA_COPY: Record<AppArea, string> = {
   dashboard: 'Visualiza indicadores por fecha, producto y sucursal para tomar decisiones rapidas.',
   ventas: 'Registra ventas y consulta el historial operativo de cada sucursal.',
+  envios: 'Controla envios a tiendas y clientes con comisiones, costos y ganancia neta.',
   productos: 'Administra articulos del catalogo y su disponibilidad comercial.',
   sucursales: 'Controla datos de sedes, ubicacion y estado operativo.',
   inventario: 'Actualiza stock, revisa existencias y audita movimientos recientes.',
@@ -139,7 +155,7 @@ function normalizeRole(roleName: string | null | undefined): UserRole {
 function hasAreaAccess(role: UserRole, area: AppArea) {
   if (role === 'administrador') return true;
   if (role === 'gerente') return area !== 'usuarios';
-  if (role === 'usuario') return area === 'ventas';
+  if (role === 'usuario') return area === 'ventas' || area === 'envios';
   return area === 'dashboard';
 }
 
@@ -439,6 +455,20 @@ export default function App() {
                 element={
                   hasAreaAccess(identityRole, 'ventas') ? (
                     <SalesSection branches={branches} refreshKey={refreshKey} onSaleCreated={handleRefresh} />
+                  ) : (
+                    <Navigate to="/dashboard" replace />
+                  )
+                }
+              />
+              <Route
+                path="/envios"
+                element={
+                  hasAreaAccess(identityRole, 'envios') ? (
+                    <ShipmentsSection
+                      branches={branches}
+                      refreshKey={refreshKey}
+                      onShipmentCreated={handleRefresh}
+                    />
                   ) : (
                     <Navigate to="/dashboard" replace />
                   )
