@@ -7,7 +7,10 @@
   </head>
   <body>
     <div id="root"></div>
-    <div id="boot-fallback" style="position:fixed;inset:12px;z-index:9999;padding:10px 12px;border-radius:12px;background:#0f1613;color:#f6f3ea;font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;white-space:pre-wrap;display:none;">
+    <div
+      id="boot-fallback"
+      style="position:fixed;inset:12px;z-index:9999;padding:10px 12px;border-radius:12px;background:#0f1613;color:#f6f3ea;font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;white-space:pre-wrap;display:none;"
+    >
       Cargando interfaz...
     </div>
     <script>
@@ -15,47 +18,9 @@
         const panel = document.getElementById('boot-fallback');
         if (!panel) return;
         panel.style.display = 'block';
-        let handling = false;
-        const show = (title, message, meta) => {
-          panel.textContent =
-            `[DEV ERROR] ${title}\n\n${message}\n` +
-            (meta ? `\n${meta}\n` : '') +
-            `\n(Si ves esto en movil, copia el mensaje y compártelo)`;
-        };
-        window.addEventListener('error', (event) => {
-          if (handling) return;
-          handling = true;
-          const meta = event.filename
-            ? `Archivo: ${event.filename}\nLinea: ${event.lineno ?? '-'} Col: ${event.colno ?? '-'}`
-            : '';
-          show(
-            'window.error',
-            event.message || 'Error desconocido',
-            meta,
-          );
-          handling = false;
-        });
-        window.onerror = function (message, source, lineno, colno, error) {
-          if (handling) return false;
-          handling = true;
-          const meta = source ? `Archivo: ${source}\nLinea: ${lineno ?? '-'} Col: ${colno ?? '-'}` : '';
-          const detail = message ?? 'Error desconocido';
-          show('window.onerror', String(detail), meta);
-          handling = false;
-          return false;
-        };
-        window.addEventListener('unhandledrejection', (event) => {
-          if (handling) return;
-          handling = true;
-          const reason = event.reason;
-          show(
-            'unhandledrejection',
-            String(reason || 'Rechazo desconocido'),
-          );
-          handling = false;
-        });
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+
