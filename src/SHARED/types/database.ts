@@ -116,6 +116,38 @@ export interface Database {
           estado?: boolean;
         }
       >;
+      almacenes: TableShape<
+        {
+          id: string;
+          nit: string | null;
+          nombre: string;
+          direccion: string | null;
+          ciudad: string | null;
+          pais: string;
+          telefono: string | null;
+          email: string | null;
+          es_propio: boolean;
+          costo_arriendo: number;
+          moneda: string;
+          estado: boolean;
+          created_at: string;
+          updated_at: string;
+        },
+        {
+          id?: string;
+          nit?: string | null;
+          nombre: string;
+          direccion?: string | null;
+          ciudad?: string | null;
+          pais?: string;
+          telefono?: string | null;
+          email?: string | null;
+          es_propio?: boolean;
+          costo_arriendo?: number;
+          moneda?: string;
+          estado?: boolean;
+        }
+      >;
       inventario: TableShape<
         {
           id: string;
@@ -129,6 +161,24 @@ export interface Database {
           id?: string;
           producto_id: string;
           local_id: string;
+          cantidad_actual: number;
+          cantidad_minima: number;
+          updated_at?: string;
+        }
+      >;
+      inventario_almacen: TableShape<
+        {
+          id: string;
+          almacen_id: string;
+          producto_id: string;
+          cantidad_actual: number;
+          cantidad_minima: number;
+          updated_at: string;
+        },
+        {
+          id?: string;
+          almacen_id: string;
+          producto_id: string;
           cantidad_actual: number;
           cantidad_minima: number;
           updated_at?: string;
@@ -150,6 +200,32 @@ export interface Database {
         {
           producto_id: string;
           local_id: string;
+          usuarios_id?: string | null;
+          tipo_movimiento: 'ENTRADA' | 'SALIDA' | 'AJUSTE';
+          cantidad: number;
+          fecha?: string;
+          motivo?: string | null;
+          origen_tipo?: string;
+          origen_id?: string | null;
+        }
+      >;
+      movimientos_almacen: TableShape<
+        {
+          id: number;
+          almacen_id: string;
+          producto_id: string;
+          usuarios_id: string | null;
+          tipo_movimiento: 'ENTRADA' | 'SALIDA' | 'AJUSTE';
+          cantidad: number;
+          fecha: string;
+          motivo: string | null;
+          origen_tipo: string;
+          origen_id: string | null;
+        },
+        {
+          id?: number;
+          almacen_id: string;
+          producto_id: string;
           usuarios_id?: string | null;
           tipo_movimiento: 'ENTRADA' | 'SALIDA' | 'AJUSTE';
           cantidad: number;
@@ -190,6 +266,7 @@ export interface Database {
       envios: TableShape<
         {
           id: string;
+          almacen_id: string | null;
           local_id: string | null;
           usuario_id: string;
           producto_id: string;
@@ -211,6 +288,7 @@ export interface Database {
         },
         {
           id?: string;
+          almacen_id?: string | null;
           local_id?: string | null;
           usuario_id: string;
           producto_id: string;

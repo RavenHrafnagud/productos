@@ -5,6 +5,7 @@
 import { FormEvent, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import type { Branch } from '../../BRANCHES/types/Branch';
+import type { Warehouse } from '../../WAREHOUSES/types/Warehouse';
 import { useProducts } from '../../PRODUCTS/hooks/useProducts';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
 import {
@@ -35,11 +36,13 @@ import type { ShipmentDestinationType, ShipmentStatus } from '../types/Shipment'
 
 interface ShipmentsSectionProps {
   branches: Branch[];
+  warehouses: Warehouse[];
   refreshKey: number;
   onShipmentCreated?: () => void;
 }
 
 interface ShipmentForm {
+  almacenId: string;
   tipoDestino: ShipmentDestinationType;
   localId: string;
   destinatario: string;
@@ -124,6 +127,7 @@ function toDateInputValue(date: Date) {
 }
 
 const EMPTY_FORM: ShipmentForm = {
+  almacenId: '',
   tipoDestino: 'TIENDA',
   localId: '',
   destinatario: '',
@@ -137,7 +141,7 @@ const EMPTY_FORM: ShipmentForm = {
   observaciones: '',
 };
 
-export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: ShipmentsSectionProps) {
+export function ShipmentsSection({ branches, warehouses, refreshKey, onShipmentCreated }: ShipmentsSectionProps) {
   const { products } = useProducts(refreshKey);
   const {
     shipments,
@@ -169,6 +173,10 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
   const friendlyUpdateError = toFriendlySupabaseMessage(updateError, 'envios');
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch])), [branches]);
+  const activeWarehouseOptions = useMemo(
+    () => warehouses.filter((warehouse) => warehouse.estado).map((warehouse) => ({ id: warehouse.id, name: warehouse.nombre })),
+    [warehouses],
+  );
   const activeBranchOptions = useMemo(
     () => branches.filter((branch) => branch.estado).map((branch) => ({ id: branch.id, name: branch.nombre })),
     [branches],
@@ -206,6 +214,7 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
       if (!query) return true;
 
       const haystack = [
+        shipment.almacenNombre,
         shipment.destinatario,
         shipment.productoNombre,
         shipment.localNombre,
@@ -247,7 +256,7 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
       return {
         ...prev,
         tipoDestino: nextType,
-        localId: nextBranchId,
+        localId: mustUseStore ? nextBranchId : '',
         comisionPorcentaje: mustUseStore ? String(branchCommission) : '0',
       };
     });
@@ -282,6 +291,10 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
     const comision = toPositiveNumber(form.comisionPorcentaje);
     const mustUseStore = form.tipoDestino === 'TIENDA' || form.tipoDestino === 'LOCAL';
 
+    if (!form.almacenId) {
+      setFormError('Debes seleccionar el almacen origen del envio.');
+      return;
+    }
     if (!destinatario) {
       setFormError('Debes indicar el destinatario del envio.');
       return;
@@ -298,13 +311,14 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
       setFormError('La comision debe estar entre 0 y 100.');
       return;
     }
-    if (!form.localId) {
-      setFormError('Debes seleccionar una sucursal para mantener la trazabilidad del inventario.');
+    if (mustUseStore && !form.localId) {
+      setFormError('Debes seleccionar una sucursal destino para envios a tienda/local.');
       return;
     }
 
     try {
       await addShipment({
+        almacenId: form.almacenId,
         localId: form.localId,
         productoId: form.productoId,
         destinatario,
@@ -318,7 +332,10 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
         fechaEnvio: new Date(form.fechaEnvio).toISOString(),
         observaciones: sanitizeText(form.observaciones, 240),
       });
-      setForm(EMPTY_FORM);
+      setForm((prev) => ({
+        ...EMPTY_FORM,
+        almacenId: prev.almacenId,
+      }));
       onShipmentCreated?.();
     } catch {
       // Error visible por createError.
@@ -388,8 +405,29 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
             </SummaryCard>
           </SummaryGrid>
 
+          {activeWarehouseOptions.length === 0 && (
+            <StatusState
+              kind="info"
+              message="No hay almacenes activos. Crea un almacen en el modulo Almacen para registrar envios."
+            />
+          )}
+
           <FormGrid onSubmit={handleSubmit}>
             <Fields>
+              <Field>
+                Almacen origen
+                <SelectControl
+                  value={form.almacenId}
+                  onChange={(event) => setForm((prev) => ({ ...prev, almacenId: event.target.value }))}
+                >
+                  <option value="">Selecciona un almacen</option>
+                  {activeWarehouseOptions.map((warehouse) => (
+                    <option key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}
+                    </option>
+                  ))}
+                </SelectControl>
+              </Field>
               <Field>
                 Tipo de destino
                 <SelectControl
@@ -403,13 +441,13 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
                 </SelectControl>
               </Field>
               <Field>
-                {isStoreDestination ? 'Sucursal destino' : 'Sucursal origen'}
+                {isStoreDestination ? 'Sucursal destino' : 'Sucursal destino (opcional)'}
                 <SelectControl
                   value={form.localId}
                   onChange={(event) => handleBranchChange(event.target.value)}
                 >
                   <option value="">
-                    {isStoreDestination ? 'Selecciona sucursal destino' : 'Selecciona sucursal origen'}
+                    {isStoreDestination ? 'Selecciona sucursal destino' : 'Sin sucursal destino'}
                   </option>
                   {activeBranchOptions.map((branch) => (
                     <option key={branch.id} value={branch.id}>
@@ -544,7 +582,7 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
             {updateStatus === 'success' && <StatusState kind="info" message="Estado de envio actualizado." />}
 
             <ButtonsRow>
-              <PrimaryButton type="submit" disabled={createStatus === 'submitting'}>
+              <PrimaryButton type="submit" disabled={createStatus === 'submitting' || activeWarehouseOptions.length === 0}>
                 {createStatus === 'submitting' ? 'Registrando envio...' : 'Registrar envio'}
               </PrimaryButton>
               <GhostButton type="button" onClick={() => setForm(EMPTY_FORM)}>
@@ -562,7 +600,7 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
               <InputControl
                 value={searchText}
                 onChange={(event) => setSearchText(event.target.value)}
-                placeholder="Destino, producto, sucursal o canal"
+                placeholder="Almacen, destino, producto, sucursal o canal"
               />
             </Field>
             <Field>
@@ -618,6 +656,7 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
                 <thead>
                   <tr>
                     <th>Fecha</th>
+                    <th className="hide-mobile">Almacen</th>
                     <th>Canal</th>
                     <th>Destino</th>
                     <th className="hide-mobile">Sucursal</th>
@@ -638,6 +677,7 @@ export function ShipmentsSection({ branches, refreshKey, onShipmentCreated }: Sh
                     return (
                       <tr key={shipment.id}>
                         <td>{formatDateTime(shipment.fechaEnvio)}</td>
+                        <td className="hide-mobile">{shipment.almacenNombre}</td>
                         <td>
                           <Tag $tone={shipment.canalVenta === 'TIENDA' ? 'warn' : 'off'}>{shipment.canalVenta}</Tag>
                         </td>

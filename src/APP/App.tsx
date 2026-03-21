@@ -12,6 +12,8 @@ import { DashboardSection } from '../DASHBOARD/components/DashboardSection';
 import { InventorySection } from '../INVENTORY/components/InventorySection';
 import { ProductsSection } from '../PRODUCTS/components/ProductsSection';
 import { SalesSection } from '../SALES/components/SalesSection';
+import { useWarehouses } from '../WAREHOUSES/hooks/useWarehouses';
+import type { CreateWarehouseInput } from '../WAREHOUSES/types/Warehouse';
 import { appEnv, isSupabaseConfigured } from '../SHARED/config/env';
 import { StatusState } from '../SHARED/ui/StatusState';
 import { isSetupError, toFriendlySupabaseMessage } from '../SHARED/utils/supabaseGuidance';
@@ -29,6 +31,11 @@ const UsersSection = lazy(() =>
 const ShipmentsSection = lazy(() =>
   import('../SHIPMENTS/components/ShipmentsSection').then((module) => ({
     default: module.ShipmentsSection,
+  })),
+);
+const WarehousesSection = lazy(() =>
+  import('../WAREHOUSES/components/WarehousesSection').then((module) => ({
+    default: module.WarehousesSection,
   })),
 );
 import {
@@ -51,7 +58,7 @@ import {
   UserPill,
 } from './styles/AppShell.styles';
 
-type AppArea = 'dashboard' | 'ventas' | 'envios' | 'productos' | 'sucursales' | 'inventario' | 'usuarios';
+type AppArea = 'dashboard' | 'ventas' | 'envios' | 'productos' | 'sucursales' | 'almacen' | 'inventario' | 'usuarios';
 type UserRole = 'administrador' | 'gerente' | 'usuario' | null;
 
 const AREA_MENU: Array<{ id: AppArea; path: string; label: string; description: string }> = [
@@ -60,6 +67,7 @@ const AREA_MENU: Array<{ id: AppArea; path: string; label: string; description: 
   { id: 'envios', path: '/envios', label: 'Envios', description: 'Despachos, comisiones por tienda y margen neto.' },
   { id: 'productos', path: '/productos', label: 'Productos', description: 'Catalogo, precios y estado de articulos.' },
   { id: 'sucursales', path: '/sucursales', label: 'Sucursales', description: 'Gestion de sedes y cobertura geografica.' },
+  { id: 'almacen', path: '/almacen', label: 'Almacen', description: 'Origen logistico, inventario base y movimientos.' },
   { id: 'inventario', path: '/inventario', label: 'Inventario', description: 'Existencias, ajustes y movimientos.' },
   { id: 'usuarios', path: '/usuarios', label: 'Usuarios', description: 'Perfil, roles y asignacion de permisos.' },
 ];
@@ -102,6 +110,13 @@ const AREA_ICONS: Record<AppArea, ReactElement> = {
       <path d="M12 6.6l.9 1.6 1.8.2-1.3 1.2.3 1.8-1.7-.9-1.7.9.3-1.8-1.3-1.2 1.8-.2z" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
     </svg>
   ),
+  almacen: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 8.2 12 4l8 4.2-8 4.2z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M4 8.2V16L12 20l8-4V8.2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M12 12.4V20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  ),
   inventario: (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M5 7.5h14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -124,6 +139,7 @@ const AREA_TITLES: Record<AppArea, string> = {
   envios: 'Modulo de envios',
   productos: 'Modulo de productos',
   sucursales: 'Modulo de sucursales',
+  almacen: 'Modulo de almacen',
   inventario: 'Modulo de inventario',
   usuarios: 'Modulo de usuarios',
 };
@@ -134,6 +150,7 @@ const AREA_COPY: Record<AppArea, string> = {
   envios: 'Controla envios a tiendas y clientes con comisiones, costos y ganancia neta.',
   productos: 'Administra articulos del catalogo y su disponibilidad comercial.',
   sucursales: 'Controla datos de sedes, ubicacion y estado operativo.',
+  almacen: 'Gestiona bodegas origen, inventario base y trazabilidad de despacho.',
   inventario: 'Actualiza stock, revisa existencias y audita movimientos recientes.',
   usuarios: 'Consulta tu perfil y administra usuarios internos con sus roles.',
 };
@@ -155,7 +172,7 @@ function normalizeRole(roleName: string | null | undefined): UserRole {
 function hasAreaAccess(role: UserRole, area: AppArea) {
   if (role === 'administrador') return true;
   if (role === 'gerente') return area !== 'usuarios';
-  if (role === 'usuario') return area === 'ventas' || area === 'envios';
+  if (role === 'usuario') return area === 'ventas';
   return area === 'dashboard';
 }
 
@@ -191,6 +208,22 @@ export default function App() {
     removeBranch,
     reload,
   } = useBranches(refreshKey);
+  const shouldLoadWarehouses = hasAreaAccess(identityRole, 'envios') || hasAreaAccess(identityRole, 'almacen');
+  const {
+    warehouses,
+    status: warehousesStatus,
+    error: warehousesError,
+    createStatus: warehouseCreateStatus,
+    createError: warehouseCreateError,
+    updateStatus: warehouseUpdateStatus,
+    updateError: warehouseUpdateError,
+    deleteStatus: warehouseDeleteStatus,
+    deleteError: warehouseDeleteError,
+    reload: reloadWarehouses,
+    addWarehouse,
+    editWarehouse,
+    removeWarehouse,
+  } = useWarehouses(refreshKey, shouldLoadWarehouses);
   const activeArea = useMemo(() => resolveAreaFromPath(location.pathname), [location.pathname]);
 
   // Si no hay una sucursal elegida, toma la primera activa en memoria.
@@ -292,6 +325,18 @@ export default function App() {
     if (!updatedBranch.estado) {
       setSelectedBranchId((currentId) => (currentId === branchId ? '' : currentId));
     }
+  };
+
+  const handleCreateWarehouse = async (input: CreateWarehouseInput) => {
+    await addWarehouse(input);
+  };
+
+  const handleUpdateWarehouse = async (warehouseId: string, input: CreateWarehouseInput) => {
+    await editWarehouse(warehouseId, input);
+  };
+
+  const handleDeleteWarehouse = async (warehouseId: string) => {
+    await removeWarehouse(warehouseId);
   };
 
   const handleLogin = async (email: string, password: string) => {
@@ -466,11 +511,37 @@ export default function App() {
                   hasAreaAccess(identityRole, 'envios') ? (
                     <ShipmentsSection
                       branches={branches}
+                      warehouses={warehouses}
                       refreshKey={refreshKey}
                       onShipmentCreated={handleRefresh}
                     />
                   ) : (
                     <Navigate to="/dashboard" replace />
+                  )
+                }
+              />
+              <Route
+                path="/almacen"
+                element={
+                  hasAreaAccess(identityRole, 'almacen') ? (
+                    <WarehousesSection
+                      warehouses={warehouses}
+                      status={warehousesStatus}
+                      error={warehousesError}
+                      createStatus={warehouseCreateStatus}
+                      createError={warehouseCreateError}
+                      updateStatus={warehouseUpdateStatus}
+                      updateError={warehouseUpdateError}
+                      deleteStatus={warehouseDeleteStatus}
+                      deleteError={warehouseDeleteError}
+                      onCreateWarehouse={handleCreateWarehouse}
+                      onUpdateWarehouse={handleUpdateWarehouse}
+                      onDeleteWarehouse={handleDeleteWarehouse}
+                      onReload={reloadWarehouses}
+                      refreshKey={refreshKey}
+                    />
+                  ) : (
+                    <Navigate to={defaultRoute} replace />
                   )
                 }
               />

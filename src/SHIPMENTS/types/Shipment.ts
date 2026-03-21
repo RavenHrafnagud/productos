@@ -7,6 +7,8 @@ export type ShipmentSalesChannel = 'TIENDA' | 'DIRECTO';
 
 export interface ShipmentRecord {
   id: string;
+  almacenId: string | null;
+  almacenNombre: string;
   localId: string | null;
   localNombre: string;
   usuarioId: string;
@@ -28,6 +30,7 @@ export interface ShipmentRecord {
 }
 
 export interface CreateShipmentInput {
+  almacenId: string | null;
   localId: string | null;
   productoId: string;
   destinatario: string;

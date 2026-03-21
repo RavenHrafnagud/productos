@@ -4,17 +4,19 @@
  */
 import { listBranches } from '../../BRANCHES/api/branchRepository';
 import { getProductsByIds } from '../../PRODUCTS/api/productRepository';
+import { listWarehouses } from '../../WAREHOUSES/api/warehouseRepository';
 import { getSupabaseClient } from '../../SHARED/lib/supabase/client';
 import { sanitizeText } from '../../SHARED/utils/validators';
 import type { CreateShipmentInput, ShipmentRecord, UpdateShipmentStatusInput } from '../types/Shipment';
 
 const SHIPMENTS_SELECT_FULL =
-  'id, local_id, usuario_id, producto_id, destinatario, tipo_destino, canal_venta, cantidad, precio_unitario, costo_envio, comision_porcentaje, estado_envio, fecha_envio, observaciones, ingreso_bruto, comision_valor, ganancia_neta, created_at, updated_at';
+  'id, almacen_id, local_id, usuario_id, producto_id, destinatario, tipo_destino, canal_venta, cantidad, precio_unitario, costo_envio, comision_porcentaje, estado_envio, fecha_envio, observaciones, ingreso_bruto, comision_valor, ganancia_neta, created_at, updated_at';
 const SHIPMENTS_SELECT_MINIMAL =
-  'id, local_id, usuario_id, producto_id, destinatario, tipo_destino, canal_venta, cantidad, precio_unitario, costo_envio, comision_porcentaje, estado_envio, fecha_envio, observaciones, created_at, updated_at';
+  'id, almacen_id, local_id, usuario_id, producto_id, destinatario, tipo_destino, canal_venta, cantidad, precio_unitario, costo_envio, comision_porcentaje, estado_envio, fecha_envio, observaciones, created_at, updated_at';
 
 type ShipmentRow = {
   id: string;
+  almacen_id?: string | null;
   local_id?: string | null;
   usuario_id?: string | null;
   producto_id: string;
@@ -39,11 +41,12 @@ function toNumber(value: number | string | null | undefined) {
 }
 
 function isCompatibilityColumnError(rawError: string) {
-  return /does not exist/i.test(rawError) && /(canal_venta|ingreso_bruto|comision_valor|ganancia_neta|comision_porcentaje|estado_envio|fecha_envio)/i.test(rawError);
+  return /does not exist/i.test(rawError) && /(almacen_id|canal_venta|ingreso_bruto|comision_valor|ganancia_neta|comision_porcentaje|estado_envio|fecha_envio)/i.test(rawError);
 }
 
 function mapShipment(
   row: ShipmentRow,
+  warehouseNames: Map<string, string>,
   branchNames: Map<string, string>,
   productNames: Map<string, string>,
 ): ShipmentRecord {
@@ -57,6 +60,8 @@ function mapShipment(
 
   return {
     id: row.id,
+    almacenId: row.almacen_id ?? null,
+    almacenNombre: row.almacen_id ? warehouseNames.get(row.almacen_id) ?? 'Almacen no encontrado' : 'Sin almacen',
     localId: row.local_id ?? null,
     localNombre: row.local_id ? branchNames.get(row.local_id) ?? 'Sucursal no encontrada' : 'Sin sucursal',
     usuarioId: row.usuario_id ?? '',
@@ -133,6 +138,8 @@ export async function listShipments(limit = 200): Promise<ShipmentRecord[]> {
     throw new Error(`[SHIPMENTS] ${lastCompatibilityError}`);
   }
 
+  const warehouses = await listWarehouses();
+  const warehouseNames = new Map(warehouses.map((warehouse) => [warehouse.id, warehouse.nombre]));
   const branches = await listBranches();
   const branchNames = new Map(branches.map((branch) => [branch.id, branch.nombre]));
   const productIds = [...new Set(rows.map((row) => row.producto_id).filter((id) => Boolean(id)))];
@@ -141,7 +148,7 @@ export async function listShipments(limit = 200): Promise<ShipmentRecord[]> {
     [...productsById.entries()].map(([id, product]) => [id, product.nombre]),
   );
 
-  return rows.map((row) => mapShipment(row, branchNames, productNames));
+  return rows.map((row) => mapShipment(row, warehouseNames, branchNames, productNames));
 }
 
 export async function createShipment(input: CreateShipmentInput): Promise<ShipmentRecord> {
@@ -154,6 +161,7 @@ export async function createShipment(input: CreateShipmentInput): Promise<Shipme
   }
 
   const payload = {
+    almacen_id: input.almacenId,
     local_id: input.localId,
     usuario_id: authUserId,
     producto_id: input.productoId,
@@ -169,12 +177,13 @@ export async function createShipment(input: CreateShipmentInput): Promise<Shipme
     observaciones: sanitizeText(input.observaciones, 240) || null,
   };
 
-  if (!payload.destinatario || !payload.producto_id || payload.cantidad <= 0) {
-    throw new Error('Destinatario, producto y cantidad son obligatorios para registrar un envio.');
+  if (!payload.almacen_id || !payload.destinatario || !payload.producto_id || payload.cantidad <= 0) {
+    throw new Error('Almacen origen, destinatario, producto y cantidad son obligatorios para registrar un envio.');
   }
 
   const insertAttempts: Array<Record<string, string | number | null>> = [
     {
+      almacen_id: payload.almacen_id,
       local_id: payload.local_id,
       usuario_id: payload.usuario_id,
       producto_id: payload.producto_id,
@@ -190,6 +199,7 @@ export async function createShipment(input: CreateShipmentInput): Promise<Shipme
       observaciones: payload.observaciones,
     },
     {
+      almacen_id: payload.almacen_id,
       local_id: payload.local_id,
       usuario_id: payload.usuario_id,
       producto_id: payload.producto_id,
@@ -236,6 +246,8 @@ export async function createShipment(input: CreateShipmentInput): Promise<Shipme
     throw new Error('[SHIPMENTS] El envio se registro pero no se pudo recuperar.');
   }
 
+  const warehouses = await listWarehouses();
+  const warehouseNames = new Map(warehouses.map((warehouse) => [warehouse.id, warehouse.nombre]));
   const branches = await listBranches();
   const branchNames = new Map(branches.map((branch) => [branch.id, branch.nombre]));
   const productsById = await getProductsByIds([created.producto_id]);
@@ -243,7 +255,7 @@ export async function createShipment(input: CreateShipmentInput): Promise<Shipme
     [...productsById.entries()].map(([id, product]) => [id, product.nombre]),
   );
 
-  return mapShipment(created, branchNames, productNames);
+  return mapShipment(created, warehouseNames, branchNames, productNames);
 }
 
 export async function updateShipmentStatus(input: UpdateShipmentStatusInput): Promise<ShipmentRecord> {
@@ -277,13 +289,15 @@ export async function updateShipmentStatus(input: UpdateShipmentStatusInput): Pr
         throw new Error('[SHIPMENTS] El envio se actualizo pero no se pudo recuperar.');
       }
 
+      const warehouses = await listWarehouses();
+      const warehouseNames = new Map(warehouses.map((warehouse) => [warehouse.id, warehouse.nombre]));
       const branches = await listBranches();
       const branchNames = new Map(branches.map((branch) => [branch.id, branch.nombre]));
       const productsById = await getProductsByIds([updated.producto_id]);
       const productNames = new Map<string, string>(
         [...productsById.entries()].map(([id, product]) => [id, product.nombre]),
       );
-      return mapShipment(updated, branchNames, productNames);
+      return mapShipment(updated, warehouseNames, branchNames, productNames);
     }
 
     if (!isCompatibilityColumnError(updateResult.error.message)) {

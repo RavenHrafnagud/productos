@@ -12,7 +12,7 @@ const SCHEMA_MISSING_PATTERNS = [
 const PERMISSION_PATTERNS = [/permission denied/i, /not authorized/i, /new row violates row-level security/i];
 
 type GuidanceContext = 'sucursales' | 'productos' | 'inventario' | 'ventas' | 'usuarios' | 'dashboard' | 'general';
-type ExtendedGuidanceContext = GuidanceContext | 'envios';
+type ExtendedGuidanceContext = GuidanceContext | 'envios' | 'almacen';
 
 function matchesAny(value: string, patterns: RegExp[]) {
   return patterns.some((pattern) => pattern.test(value));
@@ -66,6 +66,10 @@ export function toFriendlySupabaseMessage(
     return 'Falta la trazabilidad automatica de inventario. Ejecuta database/026_traceability_sales_shipments.sql en Supabase.';
   }
 
+  if (/apply_warehouse_inventory_delta|delete_warehouse_cascade|inventario_almacen|movimientos_almacen|operaciones\.almacenes|almacen_id/i.test(rawError)) {
+    return 'Falta el modulo de almacenes y su trazabilidad. Ejecuta database/027_almacenes_traceability.sql en Supabase.';
+  }
+
   if (/list_identity_users|list_identity_roles|create_identity_role|get_identity_context|complete_identity_user_profile|assign_identity_role_to_user|sync_identity_session_link|get_identity_admin_snapshot|update_identity_user_profile|update_identity_user_password/i.test(rawError)) {
     return 'Faltan funciones RPC de identidad. Ejecuta database/015_identity_admin_management_rpc.sql, database/016_session_identity_link_and_permissions.sql, database/018_identity_snapshot_rpc.sql, database/020_update_identity_user_profile.sql y database/023_update_identity_user_password.sql en Supabase.';
   }
@@ -88,7 +92,10 @@ export function toFriendlySupabaseMessage(
       return 'Crea primero ventas y valida que el esquema ventas este expuesto en Data API.';
     }
     if (context === 'envios') {
-      return 'Configura primero la tabla ventas.envios y sus politicas. Ejecuta database/024_envios_logistica_y_sucursales.sql en Supabase.';
+      return 'Configura primero ventas.envios y su relacion con almacen. Ejecuta database/024_envios_logistica_y_sucursales.sql y database/027_almacenes_traceability.sql en Supabase.';
+    }
+    if (context === 'almacen') {
+      return 'Configura primero operaciones.almacenes, inventario_almacen y movimientos_almacen. Ejecuta database/027_almacenes_traceability.sql en Supabase.';
     }
     if (context === 'usuarios') {
       return 'Valida primero el esquema identidad y ejecuta database/013_refactor_identidad_estado_roles.sql, database/015_identity_admin_management_rpc.sql, database/016_session_identity_link_and_permissions.sql, database/018_identity_snapshot_rpc.sql y database/020_update_identity_user_profile.sql.';
@@ -113,7 +120,10 @@ export function toFriendlySupabaseMessage(
       return 'No tienes permisos para gestionar ventas. Ejecuta database/019_role_based_permissions.sql o revisa RLS del esquema ventas.';
     }
     if (context === 'envios') {
-      return 'No tienes permisos para gestionar envios. Ejecuta database/024_envios_logistica_y_sucursales.sql y revisa RLS del esquema ventas.';
+      return 'No tienes permisos para gestionar envios. Ejecuta database/024_envios_logistica_y_sucursales.sql y database/027_almacenes_traceability.sql, luego revisa RLS del esquema ventas.';
+    }
+    if (context === 'almacen') {
+      return 'No tienes permisos para gestionar almacenes. Ejecuta database/027_almacenes_traceability.sql y revisa RLS del esquema operaciones.';
     }
     if (context === 'usuarios') {
       return 'No tienes permisos para gestionar identidad (usuarios/roles). Verifica que tu usuario tenga rol admin y ejecuta database/015_identity_admin_management_rpc.sql.';
