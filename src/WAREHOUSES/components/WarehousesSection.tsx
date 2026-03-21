@@ -4,7 +4,7 @@
  */
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { getCityOptionsByCountry, getCountryOptions } from '../../SHARED/constants/geo';
+import { getCityCountByCountry, getCityOptionsByCountry, getCountryOptions } from '../../SHARED/constants/geo';
 import { getWorldCurrencyOptions } from '../../SHARED/constants/currencies';
 import { useProducts } from '../../PRODUCTS/hooks/useProducts';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
@@ -140,6 +140,40 @@ const TableActions = styled.div.attrs({ className: 'no-wrap' })`
   flex-wrap: nowrap;
 `;
 
+const FieldHint = styled.small`
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 0.72rem;
+`;
+
+const CompactSearchInput = styled(InputControl)`
+  padding: 7px 10px;
+  font-size: 0.82rem;
+  min-height: 34px;
+
+  @media (max-width: 520px) {
+    padding: 6px 9px;
+    font-size: 0.78rem;
+    min-height: 32px;
+  }
+`;
+
+const CompactCountrySelect = styled(SelectControl)`
+  padding: 7px 10px;
+  font-size: 0.82rem;
+  min-height: 34px;
+  padding-right: 30px;
+  background-position: right 9px center;
+
+  @media (max-width: 520px) {
+    padding: 6px 9px;
+    font-size: 0.78rem;
+    min-height: 32px;
+    padding-right: 28px;
+    background-position: right 8px center;
+  }
+`;
+
 export function WarehousesSection({
   warehouses,
   status,
@@ -167,6 +201,7 @@ export function WarehousesSection({
   const [deletingInventoryId, setDeletingInventoryId] = useState<string | null>(null);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
   const [collapsed, setCollapsed] = useState(false);
+  const [cityQuery, setCityQuery] = useState('');
 
   const {
     inventory,
@@ -192,7 +227,12 @@ export function WarehousesSection({
   const friendlyInventoryDeleteError = toFriendlySupabaseMessage(deleteInventoryError, 'almacen');
 
   const countryOptions = useMemo(() => getCountryOptions(), []);
-  const cityOptions = useMemo(() => getCityOptionsByCountry(form.pais), [form.pais]);
+  const cityOptions = useMemo(
+    () => getCityOptionsByCountry(form.pais, { query: cityQuery }),
+    [cityQuery, form.pais],
+  );
+  const cityTotal = useMemo(() => getCityCountByCountry(form.pais), [form.pais]);
+  const cityHasMore = cityTotal > cityOptions.length;
   const currencyOptions = useMemo(() => getWorldCurrencyOptions('es'), []);
   const productOptions = useMemo(
     () => products.filter((product) => product.estado).map((product) => ({ id: product.id, name: product.nombre })),
@@ -273,6 +313,7 @@ export function WarehousesSection({
         await onCreateWarehouse(payload);
       }
       setForm(EMPTY_WAREHOUSE_FORM);
+      setCityQuery('');
     } catch {
       // Error detallado por createError/updateError.
     }
@@ -294,12 +335,14 @@ export function WarehousesSection({
       moneda: warehouse.moneda,
       estado: warehouse.estado,
     });
+    setCityQuery(warehouse.ciudad ?? '');
   };
 
   const handleCancelEditWarehouse = () => {
     setEditingWarehouseId(null);
     setFormError(null);
     setForm(EMPTY_WAREHOUSE_FORM);
+    setCityQuery('');
   };
 
   const handleDeleteWarehouse = async (warehouse: Warehouse) => {
@@ -456,24 +499,32 @@ export function WarehousesSection({
               </Field>
               <Field>
                 Pais
-                <SelectControl
+                <CompactCountrySelect
                   value={form.pais}
-                  onChange={(event) =>
-                    setForm((prev) => ({ ...prev, pais: event.target.value, ciudad: '' }))
-                  }
+                  onChange={(event) => {
+                    setCityQuery('');
+                    setForm((prev) => ({ ...prev, pais: event.target.value, ciudad: '' }));
+                  }}
                 >
                   {countryOptions.map((country) => (
                     <option key={country.value} value={country.value}>
                       {country.label}
                     </option>
                   ))}
-                </SelectControl>
+                </CompactCountrySelect>
               </Field>
               <Field>
                 Ciudad
+                <CompactSearchInput
+                  value={cityQuery}
+                  onChange={(event) => setCityQuery(event.target.value)}
+                  placeholder={form.pais ? 'Buscar ciudad...' : 'Primero selecciona un pais'}
+                  disabled={!form.pais}
+                />
                 <SelectControl
                   value={form.ciudad}
                   onChange={(event) => setForm((prev) => ({ ...prev, ciudad: event.target.value }))}
+                  disabled={!form.pais}
                 >
                   <option value="">Selecciona una ciudad</option>
                   {cityOptions.map((city) => (
@@ -482,6 +533,11 @@ export function WarehousesSection({
                     </option>
                   ))}
                 </SelectControl>
+                <FieldHint>
+                  {form.pais
+                    ? `Mostrando ${cityOptions.length} de ${cityTotal} ciudades disponibles.${cityHasMore ? ' Escribe 2 letras para afinar y ver mas resultados.' : ''}`
+                    : 'Selecciona un pais para cargar ciudades.'}
+                </FieldHint>
               </Field>
               <Field>
                 Direccion

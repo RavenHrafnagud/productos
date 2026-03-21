@@ -28,6 +28,9 @@ export const Fields = styled.div`
 
 export const Field = styled.label`
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  justify-items: stretch;
   gap: 6px;
   font-size: 0.88rem;
   color: var(--text-muted);

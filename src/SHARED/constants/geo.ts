@@ -1,255 +1,313 @@
 /**
- * Catalogo geografico liviano para formularios.
- * Evita dependencias pesadas en runtime movil.
+ * Catalogo geografico dinamico basado en country-state-city.
+ * - Cubre paises y ciudades globales.
+ * - Localidades priorizan barrios/municipios por ciudad (con fallback).
+ * - Incluye filtros para evitar selects gigantes en movil.
  */
+import { City, Country, State } from 'country-state-city';
+
 export interface GeoOption {
   value: string;
   label: string;
 }
 
-const COUNTRY_OPTIONS: GeoOption[] = [
-  { value: 'AR', label: 'Argentina' },
-  { value: 'AU', label: 'Australia' },
-  { value: 'BO', label: 'Bolivia' },
-  { value: 'BR', label: 'Brasil' },
-  { value: 'CA', label: 'Canada' },
-  { value: 'CL', label: 'Chile' },
-  { value: 'CN', label: 'China' },
-  { value: 'CO', label: 'Colombia' },
-  { value: 'CR', label: 'Costa Rica' },
-  { value: 'CU', label: 'Cuba' },
-  { value: 'DE', label: 'Alemania' },
-  { value: 'DO', label: 'Republica Dominicana' },
-  { value: 'EC', label: 'Ecuador' },
-  { value: 'ES', label: 'Espana' },
-  { value: 'FR', label: 'Francia' },
-  { value: 'GB', label: 'Reino Unido' },
-  { value: 'GT', label: 'Guatemala' },
-  { value: 'HN', label: 'Honduras' },
-  { value: 'IE', label: 'Irlanda' },
-  { value: 'IN', label: 'India' },
-  { value: 'IT', label: 'Italia' },
-  { value: 'JP', label: 'Japon' },
-  { value: 'KR', label: 'Corea del Sur' },
-  { value: 'MX', label: 'Mexico' },
-  { value: 'NI', label: 'Nicaragua' },
-  { value: 'NL', label: 'Paises Bajos' },
-  { value: 'NZ', label: 'Nueva Zelanda' },
-  { value: 'PA', label: 'Panama' },
-  { value: 'PE', label: 'Peru' },
-  { value: 'PT', label: 'Portugal' },
-  { value: 'PY', label: 'Paraguay' },
-  { value: 'SV', label: 'El Salvador' },
-  { value: 'US', label: 'Estados Unidos' },
-  { value: 'UY', label: 'Uruguay' },
-  { value: 'VE', label: 'Venezuela' },
-];
+interface GeoQueryOptions {
+  query?: string;
+  limit?: number;
+}
 
-const CITY_OPTIONS_BY_COUNTRY: Record<string, GeoOption[]> = {
-  AR: [
-    { value: 'Buenos Aires', label: 'Buenos Aires' },
-    { value: 'Cordoba', label: 'Cordoba' },
-    { value: 'Rosario', label: 'Rosario' },
+const DEFAULT_CITY_LIMIT = 350;
+const DEFAULT_LOCALITY_LIMIT = 250;
+
+const countryCache = new Map<string, GeoOption[]>();
+const cityCache = new Map<string, GeoOption[]>();
+const stateCache = new Map<string, GeoOption[]>();
+const municipalityCache = new Map<string, GeoOption[]>();
+
+const CURATED_CITY_LOCALITIES: Record<string, string[]> = {
+  'CO|bogota': [
+    'Usaquen',
+    'Chapinero',
+    'Santa Fe',
+    'San Cristobal',
+    'Usme',
+    'Tunjuelito',
+    'Bosa',
+    'Kennedy',
+    'Fontibon',
+    'Engativa',
+    'Suba',
+    'Barrios Unidos',
+    'Teusaquillo',
+    'Los Martires',
+    'Antonio Narino',
+    'Puente Aranda',
+    'La Candelaria',
+    'Rafael Uribe Uribe',
+    'Ciudad Bolivar',
+    'Sumapaz',
   ],
-  AU: [
-    { value: 'Sydney', label: 'Sydney' },
-    { value: 'Melbourne', label: 'Melbourne' },
-    { value: 'Brisbane', label: 'Brisbane' },
+  'CO|medellin': [
+    'El Poblado',
+    'Laureles',
+    'Belen',
+    'Aranjuez',
+    'Manrique',
+    'Castilla',
+    'Robledo',
+    'San Javier',
+    'Guayabal',
+    'Buenos Aires',
   ],
-  BO: [
-    { value: 'La Paz', label: 'La Paz' },
-    { value: 'Santa Cruz', label: 'Santa Cruz' },
-    { value: 'Cochabamba', label: 'Cochabamba' },
+  'CO|cali': [
+    'Comuna 1',
+    'Comuna 2',
+    'Comuna 3',
+    'Comuna 4',
+    'Comuna 5',
+    'Comuna 6',
+    'Comuna 10',
+    'Comuna 13',
+    'Comuna 17',
+    'Comuna 22',
   ],
-  BR: [
-    { value: 'Sao Paulo', label: 'Sao Paulo' },
-    { value: 'Rio de Janeiro', label: 'Rio de Janeiro' },
-    { value: 'Brasilia', label: 'Brasilia' },
+  'CO|barranquilla': [
+    'Riomar',
+    'Norte Centro Historico',
+    'Metropolitana',
+    'Sur Occidente',
+    'Sur Oriente',
   ],
-  CA: [
-    { value: 'Toronto', label: 'Toronto' },
-    { value: 'Montreal', label: 'Montreal' },
-    { value: 'Vancouver', label: 'Vancouver' },
-  ],
-  CL: [
-    { value: 'Santiago', label: 'Santiago' },
-    { value: 'Valparaiso', label: 'Valparaiso' },
-    { value: 'Concepcion', label: 'Concepcion' },
-  ],
-  CN: [
-    { value: 'Beijing', label: 'Beijing' },
-    { value: 'Shanghai', label: 'Shanghai' },
-    { value: 'Shenzhen', label: 'Shenzhen' },
-  ],
-  CO: [
-    { value: 'Bogota', label: 'Bogota' },
-    { value: 'Medellin', label: 'Medellin' },
-    { value: 'Cali', label: 'Cali' },
-    { value: 'Barranquilla', label: 'Barranquilla' },
-    { value: 'Cartagena', label: 'Cartagena' },
-    { value: 'Bucaramanga', label: 'Bucaramanga' },
-    { value: 'Cucuta', label: 'Cucuta' },
-    { value: 'Pereira', label: 'Pereira' },
-    { value: 'Manizales', label: 'Manizales' },
-    { value: 'Santa Marta', label: 'Santa Marta' },
-  ],
-  CR: [
-    { value: 'San Jose', label: 'San Jose' },
-    { value: 'Alajuela', label: 'Alajuela' },
-    { value: 'Cartago', label: 'Cartago' },
-  ],
-  CU: [
-    { value: 'La Habana', label: 'La Habana' },
-    { value: 'Santiago de Cuba', label: 'Santiago de Cuba' },
-    { value: 'Camaguey', label: 'Camaguey' },
-  ],
-  DE: [
-    { value: 'Berlin', label: 'Berlin' },
-    { value: 'Munich', label: 'Munich' },
-    { value: 'Hamburgo', label: 'Hamburgo' },
-  ],
-  DO: [
-    { value: 'Santo Domingo', label: 'Santo Domingo' },
-    { value: 'Santiago', label: 'Santiago' },
-    { value: 'La Romana', label: 'La Romana' },
-  ],
-  EC: [
-    { value: 'Quito', label: 'Quito' },
-    { value: 'Guayaquil', label: 'Guayaquil' },
-    { value: 'Cuenca', label: 'Cuenca' },
-  ],
-  ES: [
-    { value: 'Madrid', label: 'Madrid' },
-    { value: 'Barcelona', label: 'Barcelona' },
-    { value: 'Valencia', label: 'Valencia' },
-  ],
-  FR: [
-    { value: 'Paris', label: 'Paris' },
-    { value: 'Lyon', label: 'Lyon' },
-    { value: 'Marseille', label: 'Marseille' },
-  ],
-  GB: [
-    { value: 'London', label: 'London' },
-    { value: 'Manchester', label: 'Manchester' },
-    { value: 'Birmingham', label: 'Birmingham' },
-  ],
-  GT: [
-    { value: 'Ciudad de Guatemala', label: 'Ciudad de Guatemala' },
-    { value: 'Quetzaltenango', label: 'Quetzaltenango' },
-    { value: 'Escuintla', label: 'Escuintla' },
-  ],
-  HN: [
-    { value: 'Tegucigalpa', label: 'Tegucigalpa' },
-    { value: 'San Pedro Sula', label: 'San Pedro Sula' },
-    { value: 'La Ceiba', label: 'La Ceiba' },
-  ],
-  IE: [
-    { value: 'Dublin', label: 'Dublin' },
-    { value: 'Cork', label: 'Cork' },
-    { value: 'Limerick', label: 'Limerick' },
-  ],
-  IN: [
-    { value: 'Delhi', label: 'Delhi' },
-    { value: 'Mumbai', label: 'Mumbai' },
-    { value: 'Bangalore', label: 'Bangalore' },
-  ],
-  IT: [
-    { value: 'Roma', label: 'Roma' },
-    { value: 'Milan', label: 'Milan' },
-    { value: 'Napoles', label: 'Napoles' },
-  ],
-  JP: [
-    { value: 'Tokyo', label: 'Tokyo' },
-    { value: 'Osaka', label: 'Osaka' },
-    { value: 'Kyoto', label: 'Kyoto' },
-  ],
-  KR: [
-    { value: 'Seoul', label: 'Seoul' },
-    { value: 'Busan', label: 'Busan' },
-    { value: 'Incheon', label: 'Incheon' },
-  ],
-  MX: [
-    { value: 'Ciudad de Mexico', label: 'Ciudad de Mexico' },
-    { value: 'Guadalajara', label: 'Guadalajara' },
-    { value: 'Monterrey', label: 'Monterrey' },
-  ],
-  NI: [
-    { value: 'Managua', label: 'Managua' },
-    { value: 'Leon', label: 'Leon' },
-    { value: 'Masaya', label: 'Masaya' },
-  ],
-  NL: [
-    { value: 'Amsterdam', label: 'Amsterdam' },
-    { value: 'Rotterdam', label: 'Rotterdam' },
-    { value: 'Utrecht', label: 'Utrecht' },
-  ],
-  NZ: [
-    { value: 'Auckland', label: 'Auckland' },
-    { value: 'Wellington', label: 'Wellington' },
-    { value: 'Christchurch', label: 'Christchurch' },
-  ],
-  PA: [
-    { value: 'Ciudad de Panama', label: 'Ciudad de Panama' },
-    { value: 'Colon', label: 'Colon' },
-    { value: 'David', label: 'David' },
-  ],
-  PE: [
-    { value: 'Lima', label: 'Lima' },
-    { value: 'Arequipa', label: 'Arequipa' },
-    { value: 'Trujillo', label: 'Trujillo' },
-  ],
-  PT: [
-    { value: 'Lisboa', label: 'Lisboa' },
-    { value: 'Oporto', label: 'Oporto' },
-    { value: 'Braga', label: 'Braga' },
-  ],
-  PY: [
-    { value: 'Asuncion', label: 'Asuncion' },
-    { value: 'Ciudad del Este', label: 'Ciudad del Este' },
-    { value: 'Encarnacion', label: 'Encarnacion' },
-  ],
-  SV: [
-    { value: 'San Salvador', label: 'San Salvador' },
-    { value: 'Santa Ana', label: 'Santa Ana' },
-    { value: 'San Miguel', label: 'San Miguel' },
-  ],
-  US: [
-    { value: 'New York', label: 'New York' },
-    { value: 'Los Angeles', label: 'Los Angeles' },
-    { value: 'Miami', label: 'Miami' },
-  ],
-  UY: [
-    { value: 'Montevideo', label: 'Montevideo' },
-    { value: 'Salto', label: 'Salto' },
-    { value: 'Punta del Este', label: 'Punta del Este' },
-  ],
-  VE: [
-    { value: 'Caracas', label: 'Caracas' },
-    { value: 'Maracaibo', label: 'Maracaibo' },
-    { value: 'Valencia', label: 'Valencia' },
+  'CO|cartagena': [
+    'Bocagrande',
+    'Centro Historico',
+    'Getsemani',
+    'Manga',
+    'Pie de la Popa',
   ],
 };
 
-const DEFAULT_CITY_OPTIONS: GeoOption[] = [
-  { value: 'Ciudad principal', label: 'Ciudad principal' },
-  { value: 'Centro', label: 'Centro' },
-  { value: 'Norte', label: 'Norte' },
-];
+function normalizeText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeCityKey(value: string) {
+  return normalizeText(value)
+    .replace(/\bd\.?\s*c\.?\b/g, ' ')
+    .replace(/\bdistrito\s+(capital|federal)\b/g, ' ')
+    .replace(/\b(city|ciudad|municipio)\s+de\b/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 function compareByLabel(a: GeoOption, b: GeoOption) {
-  if (a.label < b.label) return -1;
-  if (a.label > b.label) return 1;
-  return 0;
+  return a.label.localeCompare(b.label, 'es');
 }
 
-const COUNTRY_OPTIONS_SORTED = [...COUNTRY_OPTIONS].sort(compareByLabel);
-
-export function getCountryOptions(): GeoOption[] {
-  return COUNTRY_OPTIONS_SORTED;
+function uniqueByValue(options: GeoOption[]) {
+  const map = new Map<string, GeoOption>();
+  for (const option of options) {
+    if (!map.has(option.value)) {
+      map.set(option.value, option);
+    }
+  }
+  return [...map.values()];
 }
 
-export function getCityOptionsByCountry(countryCode: string): GeoOption[] {
+function buildCityKey(countryCode: string, cityName: string) {
+  return `${countryCode.trim().toUpperCase()}|${normalizeCityKey(cityName)}`;
+}
+
+function toGeoOptions(values: string[]) {
+  return uniqueByValue(
+    values
+      .map((value) => value.trim())
+      .filter((value) => value !== '')
+      .map((value) => ({ value, label: value })),
+  ).sort(compareByLabel);
+}
+
+function applyQueryAndLimit(options: GeoOption[], queryOptions: GeoQueryOptions, defaultLimit: number) {
+  const normalizedQuery = normalizeText(queryOptions.query ?? '');
+  const queryLength = normalizedQuery.length;
+  const useUnboundedResults = queryLength >= 2;
+  const limit = Math.max(1, queryOptions.limit ?? (useUnboundedResults ? Number.MAX_SAFE_INTEGER : defaultLimit));
+  const filtered =
+    normalizedQuery === ''
+      ? options
+      : options.filter((option) => normalizeText(option.label).includes(normalizedQuery));
+  return Number.isFinite(limit) ? filtered.slice(0, limit) : filtered;
+}
+
+function getCountryCatalog() {
+  const cacheKey = 'ALL';
+  const cached = countryCache.get(cacheKey);
+  if (cached) return cached;
+
+  const options = Country.getAllCountries()
+    .map((country) => ({
+      value: country.isoCode,
+      label: country.name,
+    }))
+    .sort(compareByLabel);
+
+  countryCache.set(cacheKey, options);
+  return options;
+}
+
+function getCityCatalogByCountry(countryCode: string) {
   const code = countryCode.trim().toUpperCase();
   if (!code) return [];
-  return CITY_OPTIONS_BY_COUNTRY[code] ?? DEFAULT_CITY_OPTIONS;
+  const cached = cityCache.get(code);
+  if (cached) return cached;
+  const cities = City.getCitiesOfCountry(code) ?? [];
+
+  const options = uniqueByValue(
+    cities.map((city) => ({
+      value: city.name,
+      label: city.name,
+    })),
+  ).sort(compareByLabel);
+
+  cityCache.set(code, options);
+  return options;
+}
+
+function getStateCatalogByCountry(countryCode: string) {
+  const code = countryCode.trim().toUpperCase();
+  if (!code) return [];
+  const cached = stateCache.get(code);
+  if (cached) return cached;
+
+  const options = uniqueByValue(
+    State.getStatesOfCountry(code).map((state) => ({
+      value: state.name,
+      label: state.name,
+    })),
+  ).sort(compareByLabel);
+
+  stateCache.set(code, options);
+  return options;
+}
+
+function getCuratedLocalityCatalog(countryCode: string, cityName: string) {
+  if (!countryCode || !cityName) return [];
+  const key = buildCityKey(countryCode, cityName);
+  const values = CURATED_CITY_LOCALITIES[key];
+  if (!values) return [];
+  return toGeoOptions(values);
+}
+
+function getMunicipalityCatalogByCountryAndCity(countryCode: string, cityName: string) {
+  const code = countryCode.trim().toUpperCase();
+  const normalizedCity = normalizeCityKey(cityName);
+  if (!code || !normalizedCity) return [];
+
+  const cacheKey = `${code}|${normalizedCity}`;
+  const cached = municipalityCache.get(cacheKey);
+  if (cached) return cached;
+
+  const countryCities = City.getCitiesOfCountry(code) ?? [];
+  if (countryCities.length === 0) {
+    municipalityCache.set(cacheKey, []);
+    return [];
+  }
+
+  let targetCities = countryCities.filter((city) => normalizeCityKey(city.name) === normalizedCity);
+  if (targetCities.length === 0) {
+    targetCities = countryCities.filter((city) => normalizeCityKey(city.name).includes(normalizedCity));
+  }
+
+  const stateCodes = [...new Set(targetCities.map((city) => city.stateCode).filter((value): value is string => !!value))];
+  if (stateCodes.length === 0) {
+    municipalityCache.set(cacheKey, []);
+    return [];
+  }
+
+  const selectedNames = new Set(targetCities.map((city) => normalizeCityKey(city.name)));
+  const municipalities = uniqueByValue(
+    countryCities
+      .filter((city) => (city.stateCode ? stateCodes.includes(city.stateCode) : false))
+      .map((city) => ({ value: city.name, label: city.name })),
+  )
+    .filter((option) => !selectedNames.has(normalizeCityKey(option.label)))
+    .sort(compareByLabel);
+
+  municipalityCache.set(cacheKey, municipalities);
+  return municipalities;
+}
+
+export function getCountryOptions(): GeoOption[] {
+  return getCountryCatalog();
+}
+
+/**
+ * Devuelve ciudades del pais con filtro y limite.
+ * Usa query para mobil y evitar renderizar miles de options.
+ */
+export function getCityOptionsByCountry(countryCode: string, queryOptions: GeoQueryOptions = {}): GeoOption[] {
+  const catalog = getCityCatalogByCountry(countryCode);
+  return applyQueryAndLimit(catalog, queryOptions, DEFAULT_CITY_LIMIT);
+}
+
+/**
+ * Devuelve localidades (barrios/municipios) para una ciudad.
+ * Prioriza catalogo curado por ciudad y luego municipios cercanos por estado/provincia.
+ */
+export function getLocalityOptionsByCountryAndCity(
+  countryCode: string,
+  cityName: string,
+  queryOptions: GeoQueryOptions = {},
+): GeoOption[] {
+  const code = countryCode.trim().toUpperCase();
+  if (!code || !cityName.trim()) return [];
+
+  const curatedCatalog = getCuratedLocalityCatalog(code, cityName);
+  if (curatedCatalog.length > 0) {
+    return applyQueryAndLimit(curatedCatalog, queryOptions, DEFAULT_LOCALITY_LIMIT);
+  }
+
+  const municipalityCatalog = getMunicipalityCatalogByCountryAndCity(code, cityName);
+  if (municipalityCatalog.length > 0) {
+    return applyQueryAndLimit(municipalityCatalog, queryOptions, DEFAULT_LOCALITY_LIMIT);
+  }
+
+  // Fallback: sugiere otras ciudades del pais como localidades/municipios relacionados.
+  const normalizedCity = normalizeCityKey(cityName);
+  const fallbackCatalog = getCityCatalogByCountry(code).filter(
+    (option) => normalizeCityKey(option.label) !== normalizedCity,
+  );
+  return applyQueryAndLimit(fallbackCatalog, queryOptions, DEFAULT_LOCALITY_LIMIT);
+}
+
+export function getCityCountByCountry(countryCode: string) {
+  return getCityCatalogByCountry(countryCode).length;
+}
+
+export function getLocalityCountByCountry(countryCode: string) {
+  const stateCount = getStateCatalogByCountry(countryCode).length;
+  if (stateCount > 0) return stateCount;
+  return getCityCatalogByCountry(countryCode).length;
+}
+
+export function getLocalityCountByCountryAndCity(countryCode: string, cityName: string) {
+  const code = countryCode.trim().toUpperCase();
+  if (!code || !cityName.trim()) return 0;
+
+  const curatedCatalog = getCuratedLocalityCatalog(code, cityName);
+  if (curatedCatalog.length > 0) return curatedCatalog.length;
+
+  const municipalityCatalog = getMunicipalityCatalogByCountryAndCity(code, cityName);
+  if (municipalityCatalog.length > 0) return municipalityCatalog.length;
+
+  const normalizedCity = normalizeCityKey(cityName);
+  const fallbackCatalog = getCityCatalogByCountry(code).filter(
+    (option) => normalizeCityKey(option.label) !== normalizedCity,
+  );
+  return fallbackCatalog.length;
 }

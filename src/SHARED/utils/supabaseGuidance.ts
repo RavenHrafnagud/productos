@@ -62,8 +62,8 @@ export function toFriendlySupabaseMessage(
     return 'Falta la funcion para eliminar usuarios. Ejecuta database/021_delete_identity_user_account.sql en Supabase.';
   }
 
-  if (/sync_inventory_from_sale|sync_inventory_from_envio|apply_inventory_delta/i.test(rawError)) {
-    return 'Falta la trazabilidad automatica de inventario. Ejecuta database/026_traceability_sales_shipments.sql en Supabase.';
+  if (/sync_inventory_from_sale|sync_inventory_from_envio|apply_inventory_delta|trg_sync_inventory_from_sale|trg_sync_inventory_from_envio|operaciones\.inventario|operaciones\.movimientos_inventario/i.test(rawError)) {
+    return 'Falta la trazabilidad automatica de inventario para ventas/envios. Ejecuta database/026_traceability_sales_shipments.sql y luego database/027_almacenes_traceability.sql en Supabase.';
   }
 
   if (/apply_warehouse_inventory_delta|delete_warehouse_cascade|inventario_almacen|movimientos_almacen|operaciones\.almacenes|almacen_id/i.test(rawError)) {

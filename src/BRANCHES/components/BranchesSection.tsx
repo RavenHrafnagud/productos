@@ -4,7 +4,7 @@
  */
 import { type ChangeEvent, FormEvent, useMemo, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { getCityOptions, getCountryOptions, getLocalityOptions } from '../data/locationCatalog';
+import { getCityCount, getCityOptions, getCountryOptions, getLocalityCount, getLocalityOptions } from '../data/locationCatalog';
 import { uploadBranchRutPdf } from '../api/branchRepository';
 import { formatDateTime } from '../../SHARED/utils/format';
 import { isSetupError, toFriendlySupabaseMessage } from '../../SHARED/utils/supabaseGuidance';
@@ -114,6 +114,40 @@ const FileInput = styled.input`
   display: none;
 `;
 
+const FieldHint = styled.small`
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 0.72rem;
+`;
+
+const CompactSearchInput = styled(InputControl)`
+  padding: 7px 10px;
+  font-size: 0.82rem;
+  min-height: 34px;
+
+  @media (max-width: 520px) {
+    padding: 6px 9px;
+    font-size: 0.78rem;
+    min-height: 32px;
+  }
+`;
+
+const CompactCountrySelect = styled(SelectControl)`
+  padding: 7px 10px;
+  font-size: 0.82rem;
+  min-height: 34px;
+  padding-right: 30px;
+  background-position: right 9px center;
+
+  @media (max-width: 520px) {
+    padding: 6px 9px;
+    font-size: 0.78rem;
+    min-height: 32px;
+    padding-right: 28px;
+    background-position: right 8px center;
+  }
+`;
+
 export function BranchesSection({
   branches,
   status,
@@ -136,6 +170,8 @@ export function BranchesSection({
   const [editingBranchId, setEditingBranchId] = useState<string | null>(null);
   const [deletingBranchId, setDeletingBranchId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [cityQuery, setCityQuery] = useState('');
+  const [localityQuery, setLocalityQuery] = useState('');
   const rutFileInputRef = useRef<HTMLInputElement | null>(null);
   const friendlyLoadError = toFriendlySupabaseMessage(error, 'sucursales');
   const friendlyCreateError = toFriendlySupabaseMessage(createError, 'sucursales');
@@ -145,11 +181,15 @@ export function BranchesSection({
 
   // Catalogos dependientes para experiencia guiada en ubicaciones.
   const countryOptions = useMemo(() => getCountryOptions(), []);
-  const cityOptions = useMemo(() => getCityOptions(form.pais), [form.pais]);
+  const cityOptions = useMemo(() => getCityOptions(form.pais, cityQuery), [form.pais, cityQuery]);
+  const cityTotal = useMemo(() => getCityCount(form.pais), [form.pais]);
   const localityOptions = useMemo(
-    () => getLocalityOptions(form.pais, form.ciudad),
-    [form.pais, form.ciudad],
+    () => getLocalityOptions(form.pais, form.ciudad, localityQuery),
+    [form.pais, form.ciudad, localityQuery],
   );
+  const localityTotal = useMemo(() => getLocalityCount(form.pais, form.ciudad), [form.pais, form.ciudad]);
+  const cityHasMore = cityTotal > cityOptions.length;
+  const localityHasMore = localityTotal > localityOptions.length;
   const summary = useMemo(() => {
     const total = branches.length;
     const active = branches.filter((branch) => branch.estado).length;
@@ -183,7 +223,7 @@ export function BranchesSection({
       return;
     }
     if (!payload.pais || !payload.ciudad || !payload.localidad) {
-      setFormError('Debes seleccionar pais, ciudad y barrio/localidad.');
+      setFormError('Debes seleccionar pais, ciudad y barrio/municipio.');
       return;
     }
     if (porcentajeComision === null || porcentajeComision < 0 || porcentajeComision > 100) {
@@ -203,6 +243,8 @@ export function BranchesSection({
         await onCreateBranch(payload);
       }
       setForm(EMPTY_FORM);
+      setCityQuery('');
+      setLocalityQuery('');
     } catch {
       // El detalle se muestra en createError/updateError.
     }
@@ -227,12 +269,16 @@ export function BranchesSection({
       email: branch.email ?? '',
       estado: branch.estado,
     });
+    setCityQuery(branch.ciudad ?? '');
+    setLocalityQuery(branch.localidad ?? '');
   };
 
   const handleCancelEdit = () => {
     setEditingBranchId(null);
     setFormError(null);
     setForm(EMPTY_FORM);
+    setCityQuery('');
+    setLocalityQuery('');
     setRutUploadStatus('idle');
     setRutUploadError(null);
   };
@@ -350,16 +396,18 @@ export function BranchesSection({
               </Field>
               <Field>
                 Pais
-                <SelectControl
+                <CompactCountrySelect
                   value={form.pais}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    setCityQuery('');
+                    setLocalityQuery('');
                     setForm((prev) => ({
                       ...prev,
                       pais: event.target.value,
                       ciudad: '',
                       localidad: '',
-                    }))
-                  }
+                    }));
+                  }}
                 >
                   <option value="">Selecciona un pais</option>
                   {countryOptions.map((country) => (
@@ -367,19 +415,26 @@ export function BranchesSection({
                       {country.label}
                     </option>
                   ))}
-                </SelectControl>
+                </CompactCountrySelect>
               </Field>
               <Field>
                 Ciudad
+                <CompactSearchInput
+                  value={cityQuery}
+                  onChange={(event) => setCityQuery(event.target.value)}
+                  placeholder={form.pais ? 'Buscar ciudad...' : 'Primero selecciona un pais'}
+                  disabled={!form.pais}
+                />
                 <SelectControl
                   value={form.ciudad}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    setLocalityQuery('');
                     setForm((prev) => ({
                       ...prev,
                       ciudad: event.target.value,
                       localidad: '',
-                    }))
-                  }
+                    }));
+                  }}
                   disabled={!form.pais}
                 >
                   <option value="">{form.pais ? 'Selecciona una ciudad' : 'Primero selecciona un pais'}</option>
@@ -389,21 +444,37 @@ export function BranchesSection({
                     </option>
                   ))}
                 </SelectControl>
+                <FieldHint>
+                  {form.pais
+                    ? `Mostrando ${cityOptions.length} de ${cityTotal} ciudades disponibles.${cityHasMore ? ' Escribe 2 letras para afinar y ver mas resultados.' : ''}`
+                    : 'Selecciona un pais para cargar ciudades.'}
+                </FieldHint>
               </Field>
               <Field>
-                Barrio o Localidad
+                Barrio o Municipio
+                <CompactSearchInput
+                  value={localityQuery}
+                  onChange={(event) => setLocalityQuery(event.target.value)}
+                  placeholder={form.ciudad ? 'Buscar barrio o municipio...' : 'Primero selecciona una ciudad'}
+                  disabled={!form.ciudad}
+                />
                 <SelectControl
                   value={form.localidad}
                   onChange={(event) => setForm((prev) => ({ ...prev, localidad: event.target.value }))}
                   disabled={!form.ciudad}
                 >
-                  <option value="">{form.ciudad ? 'Selecciona una localidad' : 'Primero selecciona una ciudad'}</option>
+                  <option value="">{form.ciudad ? 'Selecciona barrio o municipio' : 'Primero selecciona una ciudad'}</option>
                   {localityOptions.map((item) => (
                     <option key={item.value} value={item.value}>
                       {item.label}
                     </option>
                   ))}
                 </SelectControl>
+                <FieldHint>
+                  {form.ciudad
+                    ? `Mostrando ${localityOptions.length} de ${localityTotal} barrios/municipios disponibles.${localityHasMore ? ' Escribe 2 letras para afinar y ver mas resultados.' : ''}`
+                    : 'Selecciona una ciudad para cargar barrios o municipios.'}
+                </FieldHint>
               </Field>
               <Field>
                 Telefono
@@ -530,7 +601,7 @@ export function BranchesSection({
                     <th>Sucursal</th>
                     <th className="hide-mobile">Pais</th>
                     <th>Ciudad</th>
-                    <th className="hide-mobile">Barrio/Localidad</th>
+                    <th className="hide-mobile">Barrio/Municipio</th>
                     <th className="num">Comision %</th>
                     <th className="hide-mobile">PDF RUT</th>
                     <th className="hide-mobile">Direccion</th>
