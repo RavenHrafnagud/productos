@@ -50,8 +50,8 @@ export function useSales(refreshKey: number): UseSalesResult {
     setCreateStatus('submitting');
     setCreateError(null);
     try {
-      const sale = await createSale(input);
-      setSales((prev) => [sale, ...prev]);
+      const createdRows = await createSale(input);
+      setSales((prev) => [...createdRows, ...prev]);
       setCreateStatus('success');
     } catch (err) {
       setCreateStatus('error');

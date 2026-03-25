@@ -66,8 +66,20 @@ export function toFriendlySupabaseMessage(
     return 'Falta la trazabilidad automatica de inventario para ventas/envios. Ejecuta database/026_traceability_sales_shipments.sql y luego database/027_almacenes_traceability.sql en Supabase.';
   }
 
+  if (/tipo_movimiento.+is of type.+but expression is of type text|column "tipo_movimiento" is of type/i.test(rawError)) {
+    return 'Hay un casteo pendiente del enum tipo_movimiento. Ejecuta database/028_fix_movimientos_tipo_movimiento_cast.sql en Supabase.';
+  }
+
+  if (/movimientos_inventario_origen_tipo_check|origen_tipo.+violates check constraint|violates check constraint.+origen_tipo/i.test(rawError)) {
+    return 'El check de origen_tipo en movimientos_inventario no incluye los valores de trazabilidad. Ejecuta database/029_fix_movimientos_origen_tipo_check.sql en Supabase.';
+  }
+
   if (/apply_warehouse_inventory_delta|delete_warehouse_cascade|inventario_almacen|movimientos_almacen|operaciones\.almacenes|almacen_id/i.test(rawError)) {
     return 'Falta el modulo de almacenes y su trazabilidad. Ejecuta database/027_almacenes_traceability.sql en Supabase.';
+  }
+
+  if (/tipo_venta|referencia_grupo|requiere_envio|envio_registrado|tipo_envio|referencia_venta_grupo|cliente_documento|cliente_nombre|barrio|municipio/i.test(rawError)) {
+    return 'Falta la migracion del flujo comercial actualizado. Ejecuta database/031_business_flow_sales_shipments_warehouses.sql en Supabase.';
   }
 
   if (/list_identity_users|list_identity_roles|create_identity_role|get_identity_context|complete_identity_user_profile|assign_identity_role_to_user|sync_identity_session_link|get_identity_admin_snapshot|update_identity_user_profile|update_identity_user_password/i.test(rawError)) {

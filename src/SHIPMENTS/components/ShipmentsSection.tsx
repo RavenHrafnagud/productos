@@ -1,11 +1,10 @@
 /**
  * Seccion de envios.
- * Registra y controla envios por tienda/directo con rentabilidad.
+ * Gestiona envios por sucursal o individuales con multiproducto.
  */
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import type { Branch } from '../../BRANCHES/types/Branch';
-import type { Warehouse } from '../../WAREHOUSES/types/Warehouse';
 import { useProducts } from '../../PRODUCTS/hooks/useProducts';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
 import {
@@ -30,9 +29,19 @@ import {
 import { StatusState } from '../../SHARED/ui/StatusState';
 import { formatDateTime, formatMoney } from '../../SHARED/utils/format';
 import { isSetupError, toFriendlySupabaseMessage } from '../../SHARED/utils/supabaseGuidance';
-import { sanitizeText, toPositiveNumber } from '../../SHARED/utils/validators';
+import { sanitizeText } from '../../SHARED/utils/validators';
+import type { Warehouse } from '../../WAREHOUSES/types/Warehouse';
+import {
+  listPendingIndividualShipmentLines,
+  listPendingIndividualShipmentTargets,
+} from '../api/shipmentRepository';
 import { useShipments } from '../hooks/useShipments';
-import type { ShipmentDestinationType, ShipmentStatus } from '../types/Shipment';
+import type {
+  CreateShipmentLineInput,
+  PendingIndividualShipmentTarget,
+  ShipmentStatus,
+  ShipmentType,
+} from '../types/Shipment';
 
 interface ShipmentsSectionProps {
   branches: Branch[];
@@ -42,74 +51,76 @@ interface ShipmentsSectionProps {
 }
 
 interface ShipmentForm {
+  tipoEnvio: ShipmentType;
   almacenId: string;
-  tipoDestino: ShipmentDestinationType;
   localId: string;
-  destinatario: string;
-  productoId: string;
-  cantidad: string;
-  precioUnitario: string;
-  costoEnvio: string;
-  comisionPorcentaje: string;
+  pendingTargetRef: string;
+  costoEnvioTotal: string;
   estadoEnvio: ShipmentStatus;
   fechaEnvio: string;
   observaciones: string;
 }
 
-const SummaryGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-  margin-bottom: 12px;
-`;
+interface ProductLineDraft {
+  selected: boolean;
+  cantidad: string;
+  precioUnitario: number;
+}
 
-const SummaryCard = styled.article`
+const ProductList = styled.div`
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 10px 18px rgba(36, 24, 60, 0.08);
+  padding: 8px;
+`;
 
-  p {
-    margin: 0;
-    font-size: 0.74rem;
+const ProductRow = styled.label`
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 100px 120px;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  background: #fff;
+
+  @media (max-width: 760px) {
+    grid-template-columns: auto minmax(0, 1fr);
+
+    .line-price,
+    .line-qty {
+      grid-column: 2;
+    }
+  }
+`;
+
+const TotalsRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+
+  @media (max-width: 760px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const TotalCard = styled.div`
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.9);
+
+  small {
     color: var(--text-muted);
   }
 
   strong {
     display: block;
     margin-top: 4px;
-    font-size: 0.98rem;
   }
-`;
-
-const PreviewPanel = styled.section`
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-md);
-  padding: 12px;
-  background: linear-gradient(145deg, #ffffff 0%, #f7f2ff 100%);
-  box-shadow: 0 10px 20px rgba(36, 24, 60, 0.09);
-`;
-
-const FilterBar = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-  margin-top: 12px;
-  margin-bottom: 12px;
-  padding: 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-soft);
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: 0 8px 18px rgba(12, 26, 20, 0.06);
-`;
-
-const TableActions = styled.div.attrs({ className: 'no-wrap' })`
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-  align-items: center;
-  flex-wrap: nowrap;
 `;
 
 function toDatetimeLocal(date: Date | string) {
@@ -122,20 +133,17 @@ function toDatetimeLocal(date: Date | string) {
   return `${y}-${m}-${d}T${hh}:${mm}`;
 }
 
-function toDateInputValue(date: Date) {
-  return date.toISOString().slice(0, 10);
+function toNumber(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 const EMPTY_FORM: ShipmentForm = {
+  tipoEnvio: 'SUCURSAL',
   almacenId: '',
-  tipoDestino: 'TIENDA',
   localId: '',
-  destinatario: '',
-  productoId: '',
-  cantidad: '',
-  precioUnitario: '',
-  costoEnvio: '0',
-  comisionPorcentaje: '0',
+  pendingTargetRef: '',
+  costoEnvioTotal: '0',
   estadoEnvio: 'PENDIENTE',
   fechaEnvio: toDatetimeLocal(new Date()),
   observaciones: '',
@@ -155,16 +163,14 @@ export function ShipmentsSection({ branches, warehouses, refreshKey, onShipmentC
     editShipmentStatus,
     reload,
   } = useShipments(refreshKey);
+
   const [form, setForm] = useState<ShipmentForm>(EMPTY_FORM);
+  const [lineByProductId, setLineByProductId] = useState<Record<string, ProductLineDraft>>({});
+  const [pendingTargets, setPendingTargets] = useState<PendingIndividualShipmentTarget[]>([]);
+  const [pendingStatus, setPendingStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [pendingError, setPendingError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
-  const [searchText, setSearchText] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'TODOS' | ShipmentStatus>('TODOS');
-  const [filterChannel, setFilterChannel] = useState<'TODOS' | 'TIENDA' | 'DIRECTO'>('TODOS');
-  const [fromDate, setFromDate] = useState(() =>
-    toDateInputValue(new Date(Date.now() - 1000 * 60 * 60 * 24 * 30)),
-  );
-  const [toDate, setToDate] = useState(() => toDateInputValue(new Date()));
   const [statusDraftById, setStatusDraftById] = useState<Record<string, ShipmentStatus>>({});
   const [updatingShipmentId, setUpdatingShipmentId] = useState<string | null>(null);
 
@@ -172,111 +178,128 @@ export function ShipmentsSection({ branches, warehouses, refreshKey, onShipmentC
   const friendlyCreateError = toFriendlySupabaseMessage(createError, 'envios');
   const friendlyUpdateError = toFriendlySupabaseMessage(updateError, 'envios');
 
-  const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch])), [branches]);
-  const activeWarehouseOptions = useMemo(
+  const activeWarehouses = useMemo(
     () => warehouses.filter((warehouse) => warehouse.estado).map((warehouse) => ({ id: warehouse.id, name: warehouse.nombre })),
     [warehouses],
   );
-  const activeBranchOptions = useMemo(
+  const activeBranches = useMemo(
     () => branches.filter((branch) => branch.estado).map((branch) => ({ id: branch.id, name: branch.nombre })),
     [branches],
   );
   const activeProducts = useMemo(
     () =>
-      products
-        .filter((product) => product.estado)
-        .map((product) => ({ id: product.id, name: product.nombre, precio: product.precioVenta })),
+      products.map((product) => ({
+        id: product.id,
+        name: product.nombre,
+        price: product.precioVenta,
+      })),
     [products],
   );
-  const productById = useMemo(() => new Map(activeProducts.map((product) => [product.id, product])), [activeProducts]);
 
-  const preview = useMemo(() => {
-    const cantidad = toPositiveNumber(form.cantidad) ?? 0;
-    const precioUnitario = toPositiveNumber(form.precioUnitario) ?? 0;
-    const costoEnvio = toPositiveNumber(form.costoEnvio) ?? 0;
-    const comision = toPositiveNumber(form.comisionPorcentaje) ?? 0;
-    const ingresoBruto = cantidad * precioUnitario;
-    const comisionValor = (ingresoBruto * comision) / 100;
-    const gananciaNeta = ingresoBruto - comisionValor - costoEnvio;
-    return { costoEnvio, comision, ingresoBruto, comisionValor, gananciaNeta };
-  }, [form.cantidad, form.comisionPorcentaje, form.costoEnvio, form.precioUnitario]);
-  const isStoreDestination = form.tipoDestino === 'TIENDA' || form.tipoDestino === 'LOCAL';
-
-  const filteredShipments = useMemo(() => {
-    const query = searchText.trim().toLowerCase();
-    const fromTs = new Date(`${fromDate}T00:00:00`).getTime();
-    const toTs = new Date(`${toDate}T23:59:59`).getTime();
-    return shipments.filter((shipment) => {
-      const shipTs = new Date(shipment.fechaEnvio).getTime();
-      if (shipTs < fromTs || shipTs > toTs) return false;
-      if (filterStatus !== 'TODOS' && shipment.estadoEnvio !== filterStatus) return false;
-      if (filterChannel !== 'TODOS' && shipment.canalVenta !== filterChannel) return false;
-      if (!query) return true;
-
-      const haystack = [
-        shipment.almacenNombre,
-        shipment.destinatario,
-        shipment.productoNombre,
-        shipment.localNombre,
-        shipment.tipoDestino,
-        shipment.canalVenta,
-      ]
-        .join(' ')
-        .toLowerCase();
-      return haystack.includes(query);
+  useEffect(() => {
+    setLineByProductId((prev) => {
+      const next: Record<string, ProductLineDraft> = {};
+      for (const product of activeProducts) {
+        next[product.id] =
+          prev[product.id] ?? {
+            selected: false,
+            cantidad: '',
+            precioUnitario: product.price,
+          };
+      }
+      return next;
     });
-  }, [filterChannel, filterStatus, fromDate, searchText, shipments, toDate]);
+  }, [activeProducts]);
 
-  const summary = useMemo(() => {
-    const total = filteredShipments.length;
-    const entregados = filteredShipments.filter((item) => item.estadoEnvio === 'ENTREGADO').length;
-    const pendientes = filteredShipments.filter((item) => item.estadoEnvio === 'PENDIENTE').length;
-    const enviados = filteredShipments.filter((item) => item.estadoEnvio === 'ENVIADO').length;
-    const ingresoTotal = filteredShipments.reduce((acc, item) => acc + item.ingresoBruto, 0);
-    const costoTotal = filteredShipments.reduce((acc, item) => acc + item.costoEnvio, 0);
-    const comisionTotal = filteredShipments.reduce((acc, item) => acc + item.comisionValor, 0);
-    const gananciaTotal = filteredShipments.reduce((acc, item) => acc + item.gananciaNeta, 0);
-    return {
-      total,
-      entregados,
-      pendientes,
-      enviados,
-      ingresoTotal,
-      costoTotal,
-      comisionTotal,
-      gananciaTotal,
-    };
-  }, [filteredShipments]);
+  useEffect(() => {
+    if (form.tipoEnvio !== 'INDIVIDUAL') return;
+    setPendingStatus('loading');
+    setPendingError(null);
+    listPendingIndividualShipmentTargets()
+      .then((rows) => {
+        setPendingTargets(rows);
+        setPendingStatus('success');
+      })
+      .catch((err) => {
+        setPendingTargets([]);
+        setPendingStatus('error');
+        setPendingError(err instanceof Error ? err.message : 'No se pudieron cargar ventas pendientes de envio.');
+      });
+  }, [form.tipoEnvio, refreshKey]);
 
-  const handleChangeDestination = (nextType: ShipmentDestinationType) => {
-    setForm((prev) => {
-      const mustUseStore = nextType === 'TIENDA' || nextType === 'LOCAL';
-      const nextBranchId = prev.localId;
-      const branchCommission = nextBranchId ? branchById.get(nextBranchId)?.porcentajeComision ?? 0 : 0;
-      return {
-        ...prev,
-        tipoDestino: nextType,
-        localId: mustUseStore ? nextBranchId : '',
-        comisionPorcentaje: mustUseStore ? String(branchCommission) : '0',
-      };
-    });
-  };
+  useEffect(() => {
+    if (form.tipoEnvio !== 'INDIVIDUAL' || !form.pendingTargetRef) return;
 
-  const handleBranchChange = (branchId: string) => {
-    const branch = branchById.get(branchId);
-    setForm((prev) => ({
+    listPendingIndividualShipmentLines(form.pendingTargetRef)
+      .then((lines) => {
+        setLineByProductId((prev) => {
+          const next: Record<string, ProductLineDraft> = {};
+          for (const [productId, draft] of Object.entries(prev)) {
+            next[productId] = { ...draft, selected: false, cantidad: '' };
+          }
+          for (const line of lines) {
+            next[line.productoId] = {
+              selected: true,
+              cantidad: String(line.cantidad),
+              precioUnitario: line.precioUnitario,
+            };
+          }
+          return next;
+        });
+      })
+      .catch((err) => {
+        setFormError(err instanceof Error ? err.message : 'No se pudieron cargar los productos de la venta.');
+      });
+  }, [form.pendingTargetRef, form.tipoEnvio]);
+
+  const selectedPendingTarget = useMemo(
+    () => pendingTargets.find((target) => target.referenciaGrupo === form.pendingTargetRef) ?? null,
+    [form.pendingTargetRef, pendingTargets],
+  );
+
+  const selectedLines = useMemo(() => {
+    const rows: CreateShipmentLineInput[] = [];
+    for (const product of activeProducts) {
+      const line = lineByProductId[product.id];
+      if (!line?.selected) continue;
+      const qty = toNumber(line.cantidad);
+      if (!Number.isFinite(qty) || qty <= 0) continue;
+      rows.push({
+        productoId: product.id,
+        cantidad: qty,
+        precioUnitario: line.precioUnitario || product.price,
+      });
+    }
+    return rows;
+  }, [activeProducts, lineByProductId]);
+
+  const totals = useMemo(() => {
+    const totalItems = selectedLines.length;
+    const totalUnits = selectedLines.reduce((sum, line) => sum + line.cantidad, 0);
+    const shippingCost = Math.max(0, toNumber(form.costoEnvioTotal));
+    return { totalItems, totalUnits, shippingCost };
+  }, [form.costoEnvioTotal, selectedLines]);
+
+  const handleLineToggle = (productId: string, selected: boolean) => {
+    if (form.tipoEnvio === 'INDIVIDUAL') return;
+    setLineByProductId((prev) => ({
       ...prev,
-      localId: branchId,
-      comisionPorcentaje: String(branch?.porcentajeComision ?? 0),
+      [productId]: {
+        ...prev[productId],
+        selected,
+        cantidad: selected ? prev[productId]?.cantidad || '1' : '',
+      },
     }));
   };
 
-  const handleProductChange = (productId: string) => {
-    const product = productById.get(productId);
-    setForm((prev) => ({
+  const handleLineQty = (productId: string, cantidad: string) => {
+    if (form.tipoEnvio === 'INDIVIDUAL') return;
+    setLineByProductId((prev) => ({
       ...prev,
-      productoId: productId,
-      precioUnitario: product ? String(product.precio) : prev.precioUnitario,
+      [productId]: {
+        ...prev[productId],
+        cantidad,
+      },
     }));
   };
 
@@ -284,58 +307,58 @@ export function ShipmentsSection({ branches, warehouses, refreshKey, onShipmentC
     event.preventDefault();
     setFormError(null);
 
-    const destinatario = sanitizeText(form.destinatario, 120);
-    const cantidad = toPositiveNumber(form.cantidad);
-    const precioUnitario = toPositiveNumber(form.precioUnitario);
-    const costoEnvio = toPositiveNumber(form.costoEnvio);
-    const comision = toPositiveNumber(form.comisionPorcentaje);
-    const mustUseStore = form.tipoDestino === 'TIENDA' || form.tipoDestino === 'LOCAL';
-
     if (!form.almacenId) {
-      setFormError('Debes seleccionar el almacen origen del envio.');
+      setFormError('Debes seleccionar almacen origen.');
       return;
     }
-    if (!destinatario) {
-      setFormError('Debes indicar el destinatario del envio.');
+
+    if (selectedLines.length === 0) {
+      setFormError('Debes seleccionar al menos un producto para el envio.');
       return;
     }
-    if (!form.productoId || cantidad === null || cantidad <= 0) {
-      setFormError('Selecciona un producto y define una cantidad mayor a cero.');
+
+    if (form.tipoEnvio === 'SUCURSAL' && !form.localId) {
+      setFormError('Debes seleccionar una sucursal destino.');
       return;
     }
-    if (precioUnitario === null || costoEnvio === null || comision === null) {
-      setFormError('Precio unitario, costo de envio y comision deben ser numericos.');
-      return;
-    }
-    if (comision < 0 || comision > 100) {
-      setFormError('La comision debe estar entre 0 y 100.');
-      return;
-    }
-    if (mustUseStore && !form.localId) {
-      setFormError('Debes seleccionar una sucursal destino para envios a tienda/local.');
+
+    if (form.tipoEnvio === 'INDIVIDUAL' && !selectedPendingTarget) {
+      setFormError('Debes seleccionar el destinatario desde ventas pendientes.');
       return;
     }
 
     try {
       await addShipment({
+        tipoEnvio: form.tipoEnvio,
         almacenId: form.almacenId,
-        localId: form.localId,
-        productoId: form.productoId,
-        destinatario,
-        tipoDestino: form.tipoDestino,
-        canalVenta: form.tipoDestino === 'TIENDA' || form.tipoDestino === 'LOCAL' ? 'TIENDA' : 'DIRECTO',
-        cantidad,
-        precioUnitario,
-        costoEnvio,
-        comisionPorcentaje: comision,
+        localId: form.tipoEnvio === 'SUCURSAL' ? form.localId : null,
+        destinatario:
+          form.tipoEnvio === 'INDIVIDUAL'
+            ? `${selectedPendingTarget?.clienteDocumento ?? ''} | ${selectedPendingTarget?.clienteNombre ?? ''}`
+            : null,
+        clienteDocumento: form.tipoEnvio === 'INDIVIDUAL' ? selectedPendingTarget?.clienteDocumento ?? null : null,
+        clienteNombre: form.tipoEnvio === 'INDIVIDUAL' ? selectedPendingTarget?.clienteNombre ?? null : null,
+        referenciaVentaGrupo: form.tipoEnvio === 'INDIVIDUAL' ? selectedPendingTarget?.referenciaGrupo ?? null : null,
+        lineItems: selectedLines,
+        costoEnvioTotal: totals.shippingCost,
         estadoEnvio: form.estadoEnvio,
         fechaEnvio: new Date(form.fechaEnvio).toISOString(),
         observaciones: sanitizeText(form.observaciones, 240),
       });
+
       setForm((prev) => ({
         ...EMPTY_FORM,
+        tipoEnvio: prev.tipoEnvio,
         almacenId: prev.almacenId,
+        fechaEnvio: toDatetimeLocal(new Date()),
       }));
+      setLineByProductId((prev) => {
+        const next: Record<string, ProductLineDraft> = {};
+        for (const [productId, line] of Object.entries(prev)) {
+          next[productId] = { ...line, selected: false, cantidad: '' };
+        }
+        return next;
+      });
       onShipmentCreated?.();
     } catch {
       // Error visible por createError.
@@ -358,12 +381,14 @@ export function ShipmentsSection({ branches, warehouses, refreshKey, onShipmentC
     }
   };
 
+  const visibleShipments = shipments;
+
   return (
     <SectionCard>
       <SectionHeader>
         <SectionTitle>Envios</SectionTitle>
         <SectionHeaderActions>
-          <SectionMeta>{filteredShipments.length} visibles / {shipments.length} registrados</SectionMeta>
+          <SectionMeta>{visibleShipments.length} registrados</SectionMeta>
           <SectionToggle type="button" onClick={() => setCollapsed((prev) => !prev)} aria-expanded={!collapsed}>
             {collapsed ? 'Mostrar' : 'Ocultar'}
           </SectionToggle>
@@ -372,48 +397,25 @@ export function ShipmentsSection({ branches, warehouses, refreshKey, onShipmentC
 
       {!collapsed && (
         <>
-          <SummaryGrid>
-            <SummaryCard>
-              <p>Total envios</p>
-              <strong>{summary.total}</strong>
-            </SummaryCard>
-            <SummaryCard>
-              <p>Pendientes / Enviados</p>
-              <strong>
-                {summary.pendientes} / {summary.enviados}
-              </strong>
-            </SummaryCard>
-            <SummaryCard>
-              <p>Entregados</p>
-              <strong>{summary.entregados}</strong>
-            </SummaryCard>
-            <SummaryCard>
-              <p>Ingreso bruto</p>
-              <strong>{formatMoney(summary.ingresoTotal)}</strong>
-            </SummaryCard>
-            <SummaryCard>
-              <p>Comisiones</p>
-              <strong>{formatMoney(summary.comisionTotal)}</strong>
-            </SummaryCard>
-            <SummaryCard>
-              <p>Costo envio</p>
-              <strong>{formatMoney(summary.costoTotal)}</strong>
-            </SummaryCard>
-            <SummaryCard>
-              <p>Ganancia neta</p>
-              <strong>{formatMoney(summary.gananciaTotal)}</strong>
-            </SummaryCard>
-          </SummaryGrid>
-
-          {activeWarehouseOptions.length === 0 && (
-            <StatusState
-              kind="info"
-              message="No hay almacenes activos. Crea un almacen en el modulo Almacen para registrar envios."
-            />
-          )}
-
           <FormGrid onSubmit={handleSubmit}>
             <Fields>
+              <Field>
+                Tipo de envio
+                <SelectControl
+                  value={form.tipoEnvio}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      tipoEnvio: event.target.value as ShipmentType,
+                      localId: '',
+                      pendingTargetRef: '',
+                    }))
+                  }
+                >
+                  <option value="SUCURSAL">Sucursales</option>
+                  <option value="INDIVIDUAL">Individuales</option>
+                </SelectControl>
+              </Field>
               <Field>
                 Almacen origen
                 <SelectControl
@@ -421,105 +423,60 @@ export function ShipmentsSection({ branches, warehouses, refreshKey, onShipmentC
                   onChange={(event) => setForm((prev) => ({ ...prev, almacenId: event.target.value }))}
                 >
                   <option value="">Selecciona un almacen</option>
-                  {activeWarehouseOptions.map((warehouse) => (
+                  {activeWarehouses.map((warehouse) => (
                     <option key={warehouse.id} value={warehouse.id}>
                       {warehouse.name}
                     </option>
                   ))}
                 </SelectControl>
               </Field>
+
+              {form.tipoEnvio === 'SUCURSAL' && (
+                <Field>
+                  Sucursal destino
+                  <SelectControl
+                    value={form.localId}
+                    onChange={(event) => setForm((prev) => ({ ...prev, localId: event.target.value }))}
+                  >
+                    <option value="">Selecciona sucursal</option>
+                    {activeBranches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </SelectControl>
+                </Field>
+              )}
+
+              {form.tipoEnvio === 'INDIVIDUAL' && (
+                <Field>
+                  Destinatario (desde ventas)
+                  <SelectControl
+                    value={form.pendingTargetRef}
+                    onChange={(event) => setForm((prev) => ({ ...prev, pendingTargetRef: event.target.value }))}
+                  >
+                    <option value="">Selecciona cliente pendiente</option>
+                    {pendingTargets.map((target) => (
+                      <option key={target.referenciaGrupo} value={target.referenciaGrupo}>
+                        {target.clienteDocumento} | {target.clienteNombre}
+                      </option>
+                    ))}
+                  </SelectControl>
+                  {pendingStatus === 'loading' && <StatusState kind="loading" message="Cargando destinatarios..." />}
+                  {pendingStatus === 'error' && <StatusState kind="error" message={pendingError ?? 'Error de carga.'} />}
+                </Field>
+              )}
+
               <Field>
-                Tipo de destino
-                <SelectControl
-                  value={form.tipoDestino}
-                  onChange={(event) => handleChangeDestination(event.target.value as ShipmentDestinationType)}
-                >
-                  <option value="TIENDA">Tienda/sucursal</option>
-                  <option value="CLIENTE">Cliente individual</option>
-                  <option value="DISTRIBUIDOR">Distribuidor</option>
-                  <option value="LOCAL">Otro local</option>
-                </SelectControl>
-              </Field>
-              <Field>
-                {isStoreDestination ? 'Sucursal destino' : 'Sucursal destino (opcional)'}
-                <SelectControl
-                  value={form.localId}
-                  onChange={(event) => handleBranchChange(event.target.value)}
-                >
-                  <option value="">
-                    {isStoreDestination ? 'Selecciona sucursal destino' : 'Sin sucursal destino'}
-                  </option>
-                  {activeBranchOptions.map((branch) => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </option>
-                  ))}
-                </SelectControl>
-              </Field>
-              <Field>
-                Destinatario
-                <InputControl
-                  value={form.destinatario}
-                  onChange={(event) => setForm((prev) => ({ ...prev, destinatario: event.target.value }))}
-                  placeholder="Ej: Libreria Aurora / Cliente Juan Perez"
-                  required
-                />
-              </Field>
-              <Field>
-                Producto
-                <SelectControl value={form.productoId} onChange={(event) => handleProductChange(event.target.value)}>
-                  <option value="">Selecciona un producto</option>
-                  {activeProducts.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.name}
-                    </option>
-                  ))}
-                </SelectControl>
-              </Field>
-              <Field>
-                Cantidad
+                Costo de envio total
                 <InputControl
                   inputMode="decimal"
-                  value={form.cantidad}
-                  onChange={(event) => setForm((prev) => ({ ...prev, cantidad: event.target.value }))}
-                  placeholder="Ej: 10"
-                  required
+                  value={form.costoEnvioTotal}
+                  onChange={(event) => setForm((prev) => ({ ...prev, costoEnvioTotal: event.target.value }))}
                 />
               </Field>
               <Field>
-                Precio unitario
-                <InputControl
-                  inputMode="decimal"
-                  value={form.precioUnitario}
-                  readOnly
-                  title="Se define automaticamente segun el producto seleccionado."
-                  placeholder="Ej: 90000"
-                  required
-                />
-              </Field>
-              <Field>
-                Costo de envio
-                <InputControl
-                  inputMode="decimal"
-                  value={form.costoEnvio}
-                  onChange={(event) => setForm((prev) => ({ ...prev, costoEnvio: event.target.value }))}
-                  placeholder="Ej: 15000"
-                  required
-                />
-              </Field>
-              <Field>
-                Comision %
-                <InputControl
-                  inputMode="decimal"
-                  value={form.comisionPorcentaje}
-                  readOnly={isStoreDestination}
-                  onChange={(event) => setForm((prev) => ({ ...prev, comisionPorcentaje: event.target.value }))}
-                  placeholder="Ej: 25"
-                  required
-                />
-              </Field>
-              <Field>
-                Estado del envio
+                Estado
                 <SelectControl
                   value={form.estadoEnvio}
                   onChange={(event) =>
@@ -532,45 +489,69 @@ export function ShipmentsSection({ branches, warehouses, refreshKey, onShipmentC
                 </SelectControl>
               </Field>
               <Field>
-                Fecha y hora de envio
+                Fecha y hora envio
                 <InputControl
                   type="datetime-local"
                   value={form.fechaEnvio}
                   onChange={(event) => setForm((prev) => ({ ...prev, fechaEnvio: event.target.value }))}
-                  required
                 />
               </Field>
             </Fields>
+
+            <Field>
+              Productos
+              <ProductList>
+                {activeProducts.map((product) => {
+                  const line = lineByProductId[product.id] ?? {
+                    selected: false,
+                    cantidad: '',
+                    precioUnitario: product.price,
+                  };
+                  return (
+                    <ProductRow key={product.id}>
+                      <input
+                        type="checkbox"
+                        checked={line.selected}
+                        onChange={(event) => handleLineToggle(product.id, event.target.checked)}
+                        disabled={form.tipoEnvio === 'INDIVIDUAL'}
+                      />
+                      <div>{product.name}</div>
+                      <div className="line-price">{formatMoney(line.precioUnitario)}</div>
+                      <InputControl
+                        className="line-qty"
+                        inputMode="decimal"
+                        value={line.cantidad}
+                        onChange={(event) => handleLineQty(product.id, event.target.value)}
+                        disabled={!line.selected || form.tipoEnvio === 'INDIVIDUAL'}
+                      />
+                    </ProductRow>
+                  );
+                })}
+              </ProductList>
+            </Field>
+
+            <TotalsRow>
+              <TotalCard>
+                <small>Productos seleccionados</small>
+                <strong>{totals.totalItems}</strong>
+              </TotalCard>
+              <TotalCard>
+                <small>Unidades</small>
+                <strong>{totals.totalUnits.toFixed(2)}</strong>
+              </TotalCard>
+              <TotalCard>
+                <small>Costo total de envio</small>
+                <strong>{formatMoney(totals.shippingCost)}</strong>
+              </TotalCard>
+            </TotalsRow>
 
             <Field>
               Observaciones (opcional)
               <TextAreaControl
                 value={form.observaciones}
                 onChange={(event) => setForm((prev) => ({ ...prev, observaciones: event.target.value }))}
-                placeholder="Notas de logistica, guia, referencia o condiciones."
               />
             </Field>
-
-            <PreviewPanel>
-              <SummaryGrid>
-                <SummaryCard>
-                  <p>Ingreso bruto</p>
-                  <strong>{formatMoney(preview.ingresoBruto)}</strong>
-                </SummaryCard>
-                <SummaryCard>
-                  <p>Comision</p>
-                  <strong>{formatMoney(preview.comisionValor)}</strong>
-                </SummaryCard>
-                <SummaryCard>
-                  <p>Costo envio</p>
-                  <strong>{formatMoney(preview.costoEnvio)}</strong>
-                </SummaryCard>
-                <SummaryCard>
-                  <p>Ganancia neta estimada</p>
-                  <strong>{formatMoney(preview.gananciaNeta)}</strong>
-                </SummaryCard>
-              </SummaryGrid>
-            </PreviewPanel>
 
             {(formError || friendlyCreateError || friendlyUpdateError) && (
               <StatusState
@@ -579,62 +560,17 @@ export function ShipmentsSection({ branches, warehouses, refreshKey, onShipmentC
               />
             )}
             {createStatus === 'success' && <StatusState kind="info" message="Envio registrado correctamente." />}
-            {updateStatus === 'success' && <StatusState kind="info" message="Estado de envio actualizado." />}
+            {updateStatus === 'success' && <StatusState kind="info" message="Estado actualizado." />}
 
             <ButtonsRow>
-              <PrimaryButton type="submit" disabled={createStatus === 'submitting' || activeWarehouseOptions.length === 0}>
-                {createStatus === 'submitting' ? 'Registrando envio...' : 'Registrar envio'}
+              <PrimaryButton type="submit" disabled={createStatus === 'submitting'}>
+                {createStatus === 'submitting' ? 'Registrando...' : 'Registrar envio'}
               </PrimaryButton>
-              <GhostButton type="button" onClick={() => setForm(EMPTY_FORM)}>
-                Limpiar formulario
-              </GhostButton>
               <GhostButton type="button" onClick={() => reload()}>
                 Actualizar historial
               </GhostButton>
             </ButtonsRow>
           </FormGrid>
-
-          <FilterBar>
-            <Field>
-              Buscar
-              <InputControl
-                value={searchText}
-                onChange={(event) => setSearchText(event.target.value)}
-                placeholder="Almacen, destino, producto, sucursal o canal"
-              />
-            </Field>
-            <Field>
-              Canal
-              <SelectControl
-                value={filterChannel}
-                onChange={(event) => setFilterChannel(event.target.value as typeof filterChannel)}
-              >
-                <option value="TODOS">Todos</option>
-                <option value="TIENDA">Tienda</option>
-                <option value="DIRECTO">Directo</option>
-              </SelectControl>
-            </Field>
-            <Field>
-              Estado
-              <SelectControl
-                value={filterStatus}
-                onChange={(event) => setFilterStatus(event.target.value as typeof filterStatus)}
-              >
-                <option value="TODOS">Todos</option>
-                <option value="PENDIENTE">Pendiente</option>
-                <option value="ENVIADO">Enviado</option>
-                <option value="ENTREGADO">Entregado</option>
-              </SelectControl>
-            </Field>
-            <Field>
-              Desde
-              <InputControl type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
-            </Field>
-            <Field>
-              Hasta
-              <InputControl type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
-            </Field>
-          </FilterBar>
 
           {status === 'loading' && <StatusState kind="loading" message="Cargando envios..." />}
           {status === 'error' && (
@@ -643,52 +579,41 @@ export function ShipmentsSection({ branches, warehouses, refreshKey, onShipmentC
               message={friendlyLoadError ?? 'Error inesperado.'}
             />
           )}
-          {status === 'success' && shipments.length === 0 && (
+          {status === 'success' && visibleShipments.length === 0 && (
             <StatusState kind="empty" message="Aun no hay envios registrados." />
           )}
-          {status === 'success' && shipments.length > 0 && filteredShipments.length === 0 && (
-            <StatusState kind="empty" message="No hay envios que coincidan con tus filtros." />
-          )}
 
-          {status === 'success' && filteredShipments.length > 0 && (
+          {status === 'success' && visibleShipments.length > 0 && (
             <TableWrap>
               <DataTable>
                 <thead>
                   <tr>
                     <th>Fecha</th>
+                    <th>Tipo</th>
                     <th className="hide-mobile">Almacen</th>
-                    <th>Canal</th>
                     <th>Destino</th>
-                    <th className="hide-mobile">Sucursal</th>
                     <th>Producto</th>
                     <th className="num">Cant.</th>
-                    <th className="hide-mobile num">Ingreso</th>
-                    <th className="hide-mobile num">Costo envio</th>
-                    <th className="hide-mobile num">Comision</th>
-                    <th className="num">Neta</th>
+                    <th className="num">Costo envio</th>
                     <th>Estado</th>
                     <th className="actions">Gestion</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredShipments.map((shipment) => {
+                  {visibleShipments.map((shipment) => {
                     const nextStatus = statusDraftById[shipment.id] ?? shipment.estadoEnvio;
                     const statusChanged = nextStatus !== shipment.estadoEnvio;
                     return (
                       <tr key={shipment.id}>
                         <td>{formatDateTime(shipment.fechaEnvio)}</td>
-                        <td className="hide-mobile">{shipment.almacenNombre}</td>
                         <td>
-                          <Tag $tone={shipment.canalVenta === 'TIENDA' ? 'warn' : 'off'}>{shipment.canalVenta}</Tag>
+                          <Tag $tone={shipment.tipoEnvio === 'SUCURSAL' ? 'warn' : 'off'}>{shipment.tipoEnvio}</Tag>
                         </td>
-                        <td>{shipment.destinatario}</td>
-                        <td className="hide-mobile">{shipment.localNombre}</td>
+                        <td className="hide-mobile">{shipment.almacenNombre}</td>
+                        <td>{shipment.tipoEnvio === 'SUCURSAL' ? shipment.localNombre : shipment.destinatario}</td>
                         <td>{shipment.productoNombre}</td>
                         <td className="num">{shipment.cantidad.toFixed(2)}</td>
-                        <td className="hide-mobile num">{formatMoney(shipment.ingresoBruto)}</td>
-                        <td className="hide-mobile num">{formatMoney(shipment.costoEnvio)}</td>
-                        <td className="hide-mobile num">{formatMoney(shipment.comisionValor)}</td>
-                        <td className="num">{formatMoney(shipment.gananciaNeta)}</td>
+                        <td className="num">{formatMoney(shipment.costoEnvio)}</td>
                         <td>
                           <Tag
                             $tone={
@@ -703,9 +628,8 @@ export function ShipmentsSection({ branches, warehouses, refreshKey, onShipmentC
                           </Tag>
                         </td>
                         <td className="actions">
-                          <TableActions>
+                          <ButtonsRow>
                             <SelectControl
-                              className="fit-content"
                               value={nextStatus}
                               onChange={(event) =>
                                 handleStatusDraftChange(shipment.id, event.target.value as ShipmentStatus)
@@ -721,11 +645,9 @@ export function ShipmentsSection({ branches, warehouses, refreshKey, onShipmentC
                               onClick={() => handleApplyStatus(shipment.id, shipment.estadoEnvio)}
                               disabled={!statusChanged || updateStatus === 'submitting'}
                             >
-                              {updateStatus === 'submitting' && updatingShipmentId === shipment.id
-                                ? 'Aplicando...'
-                                : 'Aplicar'}
+                              {updateStatus === 'submitting' && updatingShipmentId === shipment.id ? 'Aplicando...' : 'Aplicar'}
                             </GhostButton>
-                          </TableActions>
+                          </ButtonsRow>
                         </td>
                       </tr>
                     );

@@ -1,9 +1,12 @@
-/**
- * Modelo de venta mostrado en UI.
- */
+export type SaleState = 'BORRADOR' | 'CONFIRMADA' | 'ANULADA';
+export type SaleType = 'SUCURSAL' | 'INDIVIDUAL';
+export type SaleShippingResponsible = 'CLIENTE' | 'NOSOTROS';
+
 export interface SaleRecord {
   id: string;
-  localId: string;
+  referenciaGrupo: string | null;
+  tipoVenta: SaleType;
+  localId: string | null;
   localNombre: string;
   usuarioId: string;
   usuarioNombre: string;
@@ -15,31 +18,55 @@ export interface SaleRecord {
   impuestos: number;
   descuento: number;
   total: number;
+  comisionPorcentaje: number;
+  comisionValor: number;
+  clienteDocumento: string | null;
+  clienteNombre: string | null;
+  clientePais: string | null;
+  clienteCiudad: string | null;
+  envioResponsable: SaleShippingResponsible | null;
+  requiereEnvio: boolean;
+  envioRegistrado: boolean;
   fecha: string;
-  estado: string;
+  estado: SaleState;
   moneda: string;
   numeroComprobante: string | null;
   observaciones: string | null;
 }
 
-/**
- * Payload para registrar una venta simple.
- */
+export interface CreateSaleLineInput {
+  productoId: string;
+  cantidad: number;
+  precioUnitario: number;
+}
+
 export interface CreateSaleInput {
-  localId: string;
+  tipoVenta: SaleType;
+  localId: string | null;
+  lineItems: CreateSaleLineInput[];
+  comisionPorcentaje: number;
+  estado: SaleState;
+  moneda: string;
+  numeroComprobante: string;
+  observaciones: string;
+  fecha: string;
+  clienteDocumento?: string;
+  clienteNombre?: string;
+  clientePais?: string;
+  clienteCiudad?: string;
+  envioResponsable?: SaleShippingResponsible | null;
+}
+
+export interface UpdateSaleInput {
+  localId: string | null;
   productoId: string;
   cantidad: number;
   precioUnitario: number;
   impuestos: number;
   descuento: number;
-  estado: 'BORRADOR' | 'CONFIRMADA' | 'ANULADA';
+  estado: SaleState;
   moneda: string;
   numeroComprobante: string;
   observaciones: string;
   fecha: string;
 }
-
-/**
- * Payload para actualizar una venta existente.
- */
-export interface UpdateSaleInput extends CreateSaleInput {}

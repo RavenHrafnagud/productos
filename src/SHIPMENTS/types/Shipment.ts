@@ -2,25 +2,27 @@
  * Modelo de envio para seguimiento logistico y financiero.
  */
 export type ShipmentStatus = 'PENDIENTE' | 'ENVIADO' | 'ENTREGADO';
-export type ShipmentDestinationType = 'TIENDA' | 'CLIENTE' | 'DISTRIBUIDOR' | 'LOCAL';
+export type ShipmentType = 'SUCURSAL' | 'INDIVIDUAL';
 export type ShipmentSalesChannel = 'TIENDA' | 'DIRECTO';
 
 export interface ShipmentRecord {
   id: string;
+  referenciaVentaGrupo: string | null;
+  tipoEnvio: ShipmentType;
   almacenId: string | null;
   almacenNombre: string;
   localId: string | null;
   localNombre: string;
   usuarioId: string;
+  clienteDocumento: string | null;
+  clienteNombre: string | null;
   productoId: string;
   productoNombre: string;
   destinatario: string;
-  tipoDestino: ShipmentDestinationType;
   canalVenta: ShipmentSalesChannel;
   cantidad: number;
   precioUnitario: number;
   costoEnvio: number;
-  comisionPorcentaje: number;
   estadoEnvio: ShipmentStatus;
   fechaEnvio: string;
   observaciones: string | null;
@@ -29,17 +31,22 @@ export interface ShipmentRecord {
   gananciaNeta: number;
 }
 
-export interface CreateShipmentInput {
-  almacenId: string | null;
-  localId: string | null;
+export interface CreateShipmentLineInput {
   productoId: string;
-  destinatario: string;
-  tipoDestino: ShipmentDestinationType;
-  canalVenta: ShipmentSalesChannel;
   cantidad: number;
   precioUnitario: number;
-  costoEnvio: number;
-  comisionPorcentaje: number;
+}
+
+export interface CreateShipmentInput {
+  tipoEnvio: ShipmentType;
+  almacenId: string | null;
+  localId: string | null;
+  destinatario: string | null;
+  clienteDocumento: string | null;
+  clienteNombre: string | null;
+  referenciaVentaGrupo: string | null;
+  lineItems: CreateShipmentLineInput[];
+  costoEnvioTotal: number;
   estadoEnvio: ShipmentStatus;
   fechaEnvio: string;
   observaciones: string;
@@ -48,4 +55,16 @@ export interface CreateShipmentInput {
 export interface UpdateShipmentStatusInput {
   shipmentId: string;
   estadoEnvio: ShipmentStatus;
+}
+
+export interface PendingIndividualShipmentTarget {
+  referenciaGrupo: string;
+  clienteDocumento: string;
+  clienteNombre: string;
+  clientePais: string | null;
+  clienteCiudad: string | null;
+  fechaVenta: string;
+  totalItems: number;
+  totalUnidades: number;
+  totalNeto: number;
 }

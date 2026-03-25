@@ -45,8 +45,8 @@ export function useShipments(refreshKey: number): UseShipmentsResult {
     setCreateStatus('submitting');
     setCreateError(null);
     try {
-      const created = await createShipment(input);
-      setShipments((prev) => [created, ...prev]);
+      const createdRows = await createShipment(input);
+      setShipments((prev) => [...createdRows, ...prev]);
       setCreateStatus('success');
     } catch (err) {
       setCreateStatus('error');

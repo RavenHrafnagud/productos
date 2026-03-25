@@ -64,7 +64,7 @@ type UserRole = 'administrador' | 'gerente' | 'usuario' | null;
 const AREA_MENU: Array<{ id: AppArea; path: string; label: string; description: string }> = [
   { id: 'dashboard', path: '/dashboard', label: 'Dashboard', description: 'Indicadores de venta y rendimiento comercial.' },
   { id: 'ventas', path: '/ventas', label: 'Ventas', description: 'Registro e historial de ventas por sucursal.' },
-  { id: 'envios', path: '/envios', label: 'Envios', description: 'Despachos, comisiones por tienda y margen neto.' },
+  { id: 'envios', path: '/envios', label: 'Envios', description: 'Despachos logistico por sucursal o cliente individual.' },
   { id: 'productos', path: '/productos', label: 'Productos', description: 'Catalogo, precios y estado de articulos.' },
   { id: 'sucursales', path: '/sucursales', label: 'Sucursales', description: 'Gestion de sedes y cobertura geografica.' },
   { id: 'almacen', path: '/almacen', label: 'Almacen', description: 'Origen logistico, inventario base y movimientos.' },
@@ -147,7 +147,7 @@ const AREA_TITLES: Record<AppArea, string> = {
 const AREA_COPY: Record<AppArea, string> = {
   dashboard: 'Visualiza indicadores por fecha, producto y sucursal para tomar decisiones rapidas.',
   ventas: 'Registra ventas y consulta el historial operativo de cada sucursal.',
-  envios: 'Controla envios a tiendas y clientes con comisiones, costos y ganancia neta.',
+  envios: 'Controla envios a tiendas y clientes y audita costo logistico por despacho.',
   productos: 'Administra articulos del catalogo y su disponibilidad comercial.',
   sucursales: 'Controla datos de sedes, ubicacion y estado operativo.',
   almacen: 'Gestiona bodegas origen, inventario base y trazabilidad de despacho.',

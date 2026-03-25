@@ -170,6 +170,7 @@ export function BranchesSection({
   const [editingBranchId, setEditingBranchId] = useState<string | null>(null);
   const [deletingBranchId, setDeletingBranchId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [countryQuery, setCountryQuery] = useState('');
   const [cityQuery, setCityQuery] = useState('');
   const [localityQuery, setLocalityQuery] = useState('');
   const rutFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -181,6 +182,21 @@ export function BranchesSection({
 
   // Catalogos dependientes para experiencia guiada en ubicaciones.
   const countryOptions = useMemo(() => getCountryOptions(), []);
+  const filteredCountryOptions = useMemo(() => {
+    const query = countryQuery
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+    if (!query) return countryOptions;
+    return countryOptions.filter((country) =>
+      country.label
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [countryOptions, countryQuery]);
   const cityOptions = useMemo(() => getCityOptions(form.pais, cityQuery), [form.pais, cityQuery]);
   const cityTotal = useMemo(() => getCityCount(form.pais), [form.pais]);
   const localityOptions = useMemo(
@@ -243,6 +259,7 @@ export function BranchesSection({
         await onCreateBranch(payload);
       }
       setForm(EMPTY_FORM);
+      setCountryQuery('');
       setCityQuery('');
       setLocalityQuery('');
     } catch {
@@ -277,6 +294,7 @@ export function BranchesSection({
     setEditingBranchId(null);
     setFormError(null);
     setForm(EMPTY_FORM);
+    setCountryQuery('');
     setCityQuery('');
     setLocalityQuery('');
     setRutUploadStatus('idle');
@@ -396,6 +414,11 @@ export function BranchesSection({
               </Field>
               <Field>
                 Pais
+                <CompactSearchInput
+                  value={countryQuery}
+                  onChange={(event) => setCountryQuery(event.target.value)}
+                  placeholder="Buscar pais..."
+                />
                 <CompactCountrySelect
                   value={form.pais}
                   onChange={(event) => {
@@ -410,7 +433,7 @@ export function BranchesSection({
                   }}
                 >
                   <option value="">Selecciona un pais</option>
-                  {countryOptions.map((country) => (
+                  {filteredCountryOptions.map((country) => (
                     <option key={country.value} value={country.value}>
                       {country.label}
                     </option>

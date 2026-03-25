@@ -1,12 +1,13 @@
 /**
  * Seccion de ventas.
- * Permite registrar, editar, anular y consultar historial de ventas.
+ * Soporta ventas por sucursal o individuales con multiproducto.
  */
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import type { Branch } from '../../BRANCHES/types/Branch';
 import { useProducts } from '../../PRODUCTS/hooks/useProducts';
 import { getWorldCurrencyOptions } from '../../SHARED/constants/currencies';
+import { getCityOptionsByCountry, getCountryOptions } from '../../SHARED/constants/geo';
 import { DataTable, TableWrap, Tag } from '../../SHARED/ui/DataTable';
 import {
   ButtonsRow,
@@ -31,9 +32,9 @@ import {
 import { StatusState } from '../../SHARED/ui/StatusState';
 import { formatDateTime, formatMoney } from '../../SHARED/utils/format';
 import { isSetupError, toFriendlySupabaseMessage } from '../../SHARED/utils/supabaseGuidance';
-import { sanitizeText, toPositiveNumber } from '../../SHARED/utils/validators';
+import { sanitizeText } from '../../SHARED/utils/validators';
 import { useSales } from '../hooks/useSales';
-import type { SaleRecord } from '../types/Sale';
+import type { CreateSaleLineInput, SaleRecord, SaleShippingResponsible, SaleType } from '../types/Sale';
 
 interface SalesSectionProps {
   branches: Branch[];
@@ -42,126 +43,82 @@ interface SalesSectionProps {
 }
 
 interface SaleForm {
+  tipoVenta: SaleType;
   localId: string;
-  productoId: string;
-  cantidad: string;
-  precioUnitario: string;
-  impuestos: string;
-  descuentoPorcentaje: string;
   estado: 'BORRADOR' | 'CONFIRMADA' | 'ANULADA';
   moneda: string;
   numeroComprobante: string;
   observaciones: string;
   fecha: string;
+  clienteDocumento: string;
+  clienteNombre: string;
+  clientePais: string;
+  clienteCiudad: string;
+  envioResponsable: SaleShippingResponsible;
 }
 
-const TotalsPanel = styled.section`
+interface ProductLineDraft {
+  selected: boolean;
+  cantidad: string;
+}
+
+const ProductList = styled.div`
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
   border: 1px solid var(--border-soft);
-  border-radius: var(--radius-md);
-  background: linear-gradient(140deg, #ffffff 0%, #f5efff 100%);
-  padding: 14px;
-  box-shadow: 0 12px 24px rgba(41, 28, 68, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 8px;
 `;
 
-const TotalsGrid = styled.div`
+const ProductRow = styled.label`
   display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: auto minmax(0, 1fr) 100px 120px;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  background: #fff;
 
-  @media (max-width: 980px) {
+  @media (max-width: 760px) {
+    grid-template-columns: auto minmax(0, 1fr);
+
+    .line-price,
+    .line-qty {
+      grid-column: 2;
+    }
+  }
+`;
+
+const TotalsRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+
+  @media (max-width: 760px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 520px) {
     grid-template-columns: 1fr;
   }
 `;
 
-const TotalCard = styled.article<{ $featured?: boolean }>`
-  border: 1px solid ${({ $featured }) => ($featured ? '#b092e8' : 'var(--border-soft)')};
-  border-radius: var(--radius-sm);
-  background: ${({ $featured }) =>
-    $featured ? 'linear-gradient(130deg, #efe4ff 0%, #ddccfb 100%)' : 'rgba(255, 255, 255, 0.9)'};
-  padding: 12px;
-  box-shadow: ${({ $featured }) => ($featured ? '0 10px 18px rgba(56, 36, 90, 0.18)' : 'none')};
-
-  p {
-    margin: 0;
-    color: var(--text-muted);
-    font-size: 0.8rem;
-  }
-
-  strong {
-    margin-top: 4px;
-    display: block;
-    font-size: 1rem;
-    color: ${({ $featured }) => ($featured ? '#5a2d9c' : 'var(--text-main)')};
-  }
-`;
-
-const FilterBar = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px;
-  margin-top: 12px;
-  margin-bottom: 12px;
-  padding: 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-soft);
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 8px 18px rgba(12, 26, 20, 0.06);
-`;
-
-const TableActions = styled.div.attrs({ className: 'no-wrap' })`
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-`;
-
-const HistoryPanel = styled.section`
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-soft);
-  background: linear-gradient(180deg, #ffffff 0%, #faf7ff 100%);
-  padding: 12px;
-  box-shadow: 0 10px 20px rgba(41, 28, 68, 0.1);
-`;
-
-const SummaryStrip = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-  margin-bottom: 12px;
-`;
-
-const SummaryChip = styled.article`
+const TotalCard = styled.div`
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
+  padding: 8px;
   background: rgba(255, 255, 255, 0.9);
 
-  p {
-    margin: 0;
-    font-size: 0.74rem;
+  small {
     color: var(--text-muted);
   }
 
   strong {
     display: block;
     margin-top: 4px;
-    font-size: 0.98rem;
-  }
-
-  @media (max-width: 520px) {
-    padding: 7px 9px;
-
-    p {
-      font-size: 0.72rem;
-    }
-
-    strong {
-      font-size: 0.9rem;
-    }
   }
 `;
 
@@ -175,23 +132,28 @@ function toDatetimeLocal(date: Date | string) {
   return `${y}-${m}-${d}T${hh}:${mm}`;
 }
 
-function resolveDiscountPercentage(subtotal: number, descuento: number) {
-  if (subtotal <= 0) return 0;
-  return (descuento / subtotal) * 100;
+function toNumber(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeText(value: string) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 const EMPTY_FORM: SaleForm = {
+  tipoVenta: 'SUCURSAL',
   localId: '',
-  productoId: '',
-  cantidad: '',
-  precioUnitario: '',
-  impuestos: '0',
-  descuentoPorcentaje: '0',
   estado: 'CONFIRMADA',
   moneda: 'COP',
   numeroComprobante: '',
   observaciones: '',
   fecha: toDatetimeLocal(new Date()),
+  clienteDocumento: '',
+  clienteNombre: '',
+  clientePais: 'CO',
+  clienteCiudad: '',
+  envioResponsable: 'CLIENTE',
 };
 
 export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSectionProps) {
@@ -211,13 +173,18 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
     editSale,
     cancelSale,
   } = useSales(refreshKey);
+
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
   const [annullingSaleId, setAnnullingSaleId] = useState<string | null>(null);
   const [form, setForm] = useState<SaleForm>(EMPTY_FORM);
+  const [lineByProductId, setLineByProductId] = useState<Record<string, ProductLineDraft>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
   const [filterEstado, setFilterEstado] = useState<'TODAS' | 'BORRADOR' | 'CONFIRMADA' | 'ANULADA'>('TODAS');
   const [collapsed, setCollapsed] = useState(false);
+  const [countryQuery, setCountryQuery] = useState('');
+  const [cityQuery, setCityQuery] = useState('');
+
   const friendlyLoadError = toFriendlySupabaseMessage(error, 'ventas');
   const friendlyCreateError = toFriendlySupabaseMessage(createError, 'ventas');
   const friendlyUpdateError = toFriendlySupabaseMessage(updateError, 'ventas');
@@ -225,92 +192,190 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
   const isSubmitting = createStatus === 'submitting' || updateStatus === 'submitting';
 
   const currencyOptions = useMemo(() => getWorldCurrencyOptions('es'), []);
+  const countryOptions = useMemo(() => getCountryOptions(), []);
+  const filteredCountryOptions = useMemo(() => {
+    const query = normalizeText(countryQuery.trim());
+    if (!query) return countryOptions;
+    return countryOptions.filter((country) => normalizeText(country.label).includes(query));
+  }, [countryOptions, countryQuery]);
+
+  const cityOptions = useMemo(
+    () => getCityOptionsByCountry(form.clientePais, { query: cityQuery }),
+    [cityQuery, form.clientePais],
+  );
+
+  const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch])), [branches]);
   const branchOptions = useMemo(
     () => branches.filter((branch) => branch.estado).map((branch) => ({ id: branch.id, name: branch.nombre })),
     [branches],
   );
-  const productOptions = useMemo(
-    () => products.filter((product) => product.estado).map((product) => ({ id: product.id, name: product.nombre })),
-    [products],
-  );
-  const productById = useMemo(
-    () => new Map(products.map((product) => [product.id, product])),
+  const activeProducts = useMemo(
+    () =>
+      products.filter((product) => product.estado).map((product) => ({
+        id: product.id,
+        name: product.nombre,
+        price: product.precioVenta,
+      })),
     [products],
   );
 
-  const saleCalculation = useMemo(() => {
-    const cantidad = toPositiveNumber(form.cantidad) ?? 0;
-    const precioUnitario = toPositiveNumber(form.precioUnitario) ?? 0;
-    const impuestos = toPositiveNumber(form.impuestos) ?? 0;
-    const descuentoPorcentaje = toPositiveNumber(form.descuentoPorcentaje) ?? 0;
-    const safeDescuentoPorcentaje = Math.min(Math.max(descuentoPorcentaje, 0), 100);
-    const subtotal = cantidad * precioUnitario;
-    const descuentoValor = subtotal * (safeDescuentoPorcentaje / 100);
-    const total = subtotal + impuestos - descuentoValor;
-    return {
-      cantidad,
-      precioUnitario,
-      impuestos,
-      descuentoPorcentaje: safeDescuentoPorcentaje,
-      subtotal,
-      descuentoValor,
-      total,
-    };
-  }, [form.cantidad, form.descuentoPorcentaje, form.impuestos, form.precioUnitario]);
+  useEffect(() => {
+    setLineByProductId((prev) => {
+      const next: Record<string, ProductLineDraft> = {};
+      for (const product of activeProducts) {
+        next[product.id] = prev[product.id] ?? { selected: false, cantidad: '' };
+      }
+      return next;
+    });
+  }, [activeProducts]);
+
+  const selectedLineItems = useMemo(() => {
+    const rows: CreateSaleLineInput[] = [];
+    for (const product of activeProducts) {
+      const line = lineByProductId[product.id];
+      if (!line?.selected) continue;
+      const qty = toNumber(line.cantidad);
+      if (!Number.isFinite(qty) || qty <= 0) continue;
+      rows.push({ productoId: product.id, cantidad: qty, precioUnitario: product.price });
+    }
+    return rows;
+  }, [activeProducts, lineByProductId]);
+
+  const commissionPct = useMemo(() => {
+    if (form.tipoVenta !== 'SUCURSAL' || !form.localId) return 0;
+    return Math.max(0, Math.min(100, branchById.get(form.localId)?.porcentajeComision ?? 0));
+  }, [branchById, form.localId, form.tipoVenta]);
+
+  const totals = useMemo(() => {
+    const subtotal = selectedLineItems.reduce((sum, line) => sum + line.cantidad * line.precioUnitario, 0);
+    const comision = subtotal * (commissionPct / 100);
+    const total = subtotal - comision;
+    const units = selectedLineItems.reduce((sum, line) => sum + line.cantidad, 0);
+    return { subtotal, comision, total, units, products: selectedLineItems.length };
+  }, [commissionPct, selectedLineItems]);
+
+  const clearLines = () => {
+    setLineByProductId((prev) => {
+      const next: Record<string, ProductLineDraft> = {};
+      for (const key of Object.keys(prev)) {
+        next[key] = { selected: false, cantidad: '' };
+      }
+      return next;
+    });
+  };
+
+  const resetForm = () => {
+    setEditingSaleId(null);
+    setForm((prev) => ({
+      ...EMPTY_FORM,
+      tipoVenta: prev.tipoVenta,
+      localId: prev.tipoVenta === 'SUCURSAL' ? prev.localId : '',
+      moneda: prev.moneda,
+      clientePais: prev.clientePais,
+      fecha: toDatetimeLocal(new Date()),
+    }));
+    setCityQuery('');
+    clearLines();
+  };
+
+  const handleLineToggle = (productId: string, selected: boolean) => {
+    setLineByProductId((prev) => ({
+      ...prev,
+      [productId]: {
+        selected,
+        cantidad: selected ? prev[productId]?.cantidad || '1' : '',
+      },
+    }));
+  };
+
+  const handleLineQty = (productId: string, cantidad: string) => {
+    setLineByProductId((prev) => ({
+      ...prev,
+      [productId]: {
+        selected: prev[productId]?.selected ?? false,
+        cantidad,
+      },
+    }));
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
 
-    const { cantidad, precioUnitario, impuestos, descuentoPorcentaje, subtotal, descuentoValor } = saleCalculation;
-
-    if (!form.localId || !form.productoId) {
-      setFormError('Debes seleccionar sucursal y producto.');
-      return;
-    }
-    if (cantidad <= 0 || precioUnitario < 0 || impuestos < 0) {
-      setFormError('Cantidad, precio e impuestos deben ser numericos y validos.');
-      return;
-    }
-    if (descuentoPorcentaje < 0 || descuentoPorcentaje > 100) {
-      setFormError('El descuento debe estar entre 0% y 100%.');
-      return;
-    }
-    if (descuentoValor > subtotal + impuestos) {
-      setFormError('El descuento calculado no puede superar el total bruto de la venta.');
+    if (selectedLineItems.length === 0) {
+      setFormError('Debes seleccionar al menos un producto con cantidad mayor a cero.');
       return;
     }
 
-    const payload = {
-      localId: form.localId,
-      productoId: form.productoId,
-      cantidad,
-      precioUnitario,
-      impuestos,
-      descuento: descuentoValor,
-      estado: form.estado,
-      moneda: sanitizeText(form.moneda, 3).toUpperCase() || 'COP',
-      numeroComprobante: sanitizeText(form.numeroComprobante, 80),
-      observaciones: sanitizeText(form.observaciones, 220),
-      fecha: new Date(form.fecha).toISOString(),
-    };
+    if (form.tipoVenta === 'SUCURSAL' && !form.localId) {
+      setFormError('Debes seleccionar una sucursal para este tipo de venta.');
+      return;
+    }
+
+    if (form.tipoVenta === 'INDIVIDUAL') {
+      if (!sanitizeText(form.clienteDocumento, 40) || !sanitizeText(form.clienteNombre, 120)) {
+        setFormError('Debes completar cedula y nombre del comprador.');
+        return;
+      }
+      if (!sanitizeText(form.clientePais, 40) || !sanitizeText(form.clienteCiudad, 80)) {
+        setFormError('Debes completar pais y ciudad del comprador.');
+        return;
+      }
+    }
+
+    const fechaIso = new Date(form.fecha).toISOString();
+
+    if (editingSaleId) {
+      if (selectedLineItems.length !== 1) {
+        setFormError('Para editar una venta existente debes dejar solo un producto seleccionado.');
+        return;
+      }
+      const line = selectedLineItems[0];
+      const subtotal = line.cantidad * line.precioUnitario;
+      const descuento = subtotal * (commissionPct / 100);
+      try {
+        await editSale(editingSaleId, {
+          localId: form.tipoVenta === 'SUCURSAL' ? form.localId : null,
+          productoId: line.productoId,
+          cantidad: line.cantidad,
+          precioUnitario: line.precioUnitario,
+          impuestos: 0,
+          descuento,
+          estado: form.estado,
+          moneda: sanitizeText(form.moneda, 3).toUpperCase() || 'COP',
+          numeroComprobante: sanitizeText(form.numeroComprobante, 80),
+          observaciones: sanitizeText(form.observaciones, 220),
+          fecha: fechaIso,
+        });
+        resetForm();
+        onSaleCreated?.();
+      } catch {
+        // El error se comunica por updateError.
+      }
+      return;
+    }
 
     try {
-      if (editingSaleId) {
-        await editSale(editingSaleId, payload);
-        setEditingSaleId(null);
-      } else {
-        await addSale(payload);
-      }
-      setForm((prev) => ({
-        ...EMPTY_FORM,
-        localId: prev.localId,
-        moneda: prev.moneda,
-        fecha: toDatetimeLocal(new Date()),
-      }));
+      await addSale({
+        tipoVenta: form.tipoVenta,
+        localId: form.tipoVenta === 'SUCURSAL' ? form.localId : null,
+        lineItems: selectedLineItems,
+        comisionPorcentaje: commissionPct,
+        estado: form.estado,
+        moneda: sanitizeText(form.moneda, 3).toUpperCase() || 'COP',
+        numeroComprobante: sanitizeText(form.numeroComprobante, 80),
+        observaciones: sanitizeText(form.observaciones, 220),
+        fecha: fechaIso,
+        clienteDocumento: sanitizeText(form.clienteDocumento, 40),
+        clienteNombre: sanitizeText(form.clienteNombre, 120),
+        clientePais: sanitizeText(form.clientePais, 40),
+        clienteCiudad: sanitizeText(form.clienteCiudad, 80),
+        envioResponsable: form.tipoVenta === 'INDIVIDUAL' ? form.envioResponsable : null,
+      });
+      resetForm();
       onSaleCreated?.();
     } catch {
-      // El error detallado se comunica en updateError/createError.
+      // El error se comunica por createError.
     }
   };
 
@@ -318,24 +383,39 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
     setFormError(null);
     setEditingSaleId(sale.id);
     setForm({
-      localId: sale.localId,
-      productoId: sale.productoId ?? '',
-      cantidad: String(sale.cantidad),
-      precioUnitario: String(sale.precioUnitario),
-      impuestos: String(sale.impuestos),
-      descuentoPorcentaje: resolveDiscountPercentage(sale.subtotal, sale.descuento).toFixed(2),
-      estado: sale.estado as SaleForm['estado'],
+      tipoVenta: sale.tipoVenta,
+      localId: sale.localId ?? '',
+      estado: sale.estado,
       moneda: sale.moneda,
       numeroComprobante: sale.numeroComprobante ?? '',
       observaciones: sale.observaciones ?? '',
       fecha: toDatetimeLocal(sale.fecha),
+      clienteDocumento: sale.clienteDocumento ?? '',
+      clienteNombre: sale.clienteNombre ?? '',
+      clientePais: sale.clientePais ?? 'CO',
+      clienteCiudad: sale.clienteCiudad ?? '',
+      envioResponsable: sale.envioResponsable ?? 'CLIENTE',
+    });
+    setCityQuery(sale.clienteCiudad ?? '');
+    setLineByProductId((prev) => {
+      const next: Record<string, ProductLineDraft> = {};
+      for (const key of Object.keys(prev)) {
+        next[key] = { selected: false, cantidad: '' };
+      }
+      if (sale.productoId) {
+        next[sale.productoId] = { selected: true, cantidad: String(sale.cantidad) };
+      }
+      return next;
     });
   };
 
   const handleCancelEdit = () => {
     setEditingSaleId(null);
     setFormError(null);
-    setForm((prev) => ({ ...EMPTY_FORM, localId: prev.localId, moneda: prev.moneda }));
+    setForm((prev) => ({ ...EMPTY_FORM, tipoVenta: prev.tipoVenta, localId: prev.localId, moneda: prev.moneda }));
+    setCountryQuery('');
+    setCityQuery('');
+    clearLines();
   };
 
   const handleAnnulSale = async (sale: SaleRecord) => {
@@ -368,20 +448,14 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
         sale.productoNombre,
         sale.numeroComprobante ?? '',
         sale.observaciones ?? '',
+        sale.clienteNombre ?? '',
+        sale.clienteDocumento ?? '',
       ]
         .join(' ')
         .toLowerCase();
       return haystack.includes(query);
     });
   }, [filterEstado, sales, searchText]);
-
-  const visibleSummary = useMemo(() => {
-    const totalVentas = visibleSales.length;
-    const totalIngresos = visibleSales.reduce((sum, sale) => sum + sale.total, 0);
-    const totalUnidades = visibleSales.reduce((sum, sale) => sum + sale.cantidad, 0);
-    const ticketPromedio = totalVentas > 0 ? totalIngresos / totalVentas : 0;
-    return { totalVentas, totalIngresos, totalUnidades, ticketPromedio };
-  }, [visibleSales]);
 
   return (
     <SectionCard>
@@ -401,100 +475,126 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
           <FormGrid onSubmit={handleSubmit}>
             <Fields>
               <Field>
-                Sucursal
+                Tipo de venta
                 <SelectControl
-                  value={form.localId}
-                  onChange={(event) => setForm((prev) => ({ ...prev, localId: event.target.value }))}
-                  required
-                >
-                  <option value="">Selecciona una sucursal</option>
-                  {branchOptions.map((branch) => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </option>
-                  ))}
-                </SelectControl>
-              </Field>
-
-              <Field>
-                Producto
-                <SelectControl
-                  value={form.productoId}
-                  onChange={(event) => {
-                    const nextProductId = event.target.value;
-                    const product = productById.get(nextProductId);
+                  value={form.tipoVenta}
+                  onChange={(event) =>
                     setForm((prev) => ({
                       ...prev,
-                      productoId: nextProductId,
-                      precioUnitario: product ? String(product.precioVenta) : prev.precioUnitario,
-                    }));
-                  }}
-                  required
+                      tipoVenta: event.target.value as SaleType,
+                      localId: event.target.value === 'SUCURSAL' ? prev.localId : '',
+                    }))
+                  }
                 >
-                  <option value="">Selecciona un producto</option>
-                  {productOptions.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.name}
-                    </option>
-                  ))}
+                  <option value="SUCURSAL">Sucursales</option>
+                  <option value="INDIVIDUAL">Individuales</option>
                 </SelectControl>
               </Field>
 
-              <Field>
-                Cantidad
-                <InputControl
-                  inputMode="decimal"
-                  value={form.cantidad}
-                  onChange={(event) => setForm((prev) => ({ ...prev, cantidad: event.target.value }))}
-                  placeholder="Ej: 1"
-                  required
-                />
-              </Field>
+              {form.tipoVenta === 'SUCURSAL' && (
+                <Field>
+                  Sucursal
+                  <SelectControl
+                    value={form.localId}
+                    onChange={(event) => setForm((prev) => ({ ...prev, localId: event.target.value }))}
+                    required
+                  >
+                    <option value="">Selecciona una sucursal</option>
+                    {branchOptions.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </SelectControl>
+                </Field>
+              )}
 
-              <Field>
-                Precio unitario
-                <InputControl
-                  inputMode="decimal"
-                  value={form.precioUnitario}
-                  readOnly
-                  placeholder="Ej: 90000"
-                  title="Se define automaticamente segun el producto seleccionado."
-                  required
-                />
-              </Field>
+              {form.tipoVenta === 'SUCURSAL' && (
+                <Field>
+                  Comision de sucursal (%)
+                  <InputControl value={commissionPct.toFixed(2)} readOnly />
+                </Field>
+              )}
 
-              <Field>
-                Impuestos (valor)
-                <InputControl
-                  inputMode="decimal"
-                  value={form.impuestos}
-                  onChange={(event) => setForm((prev) => ({ ...prev, impuestos: event.target.value }))}
-                  placeholder="Ej: 0"
-                  required
-                />
-              </Field>
-
-              <Field>
-                Descuento (%)
-                <InputControl
-                  inputMode="decimal"
-                  value={form.descuentoPorcentaje}
-                  onChange={(event) => setForm((prev) => ({ ...prev, descuentoPorcentaje: event.target.value }))}
-                  placeholder="Ej: 0"
-                  required
-                />
-              </Field>
+              {form.tipoVenta === 'INDIVIDUAL' && (
+                <>
+                  <Field>
+                    Cedula comprador
+                    <InputControl
+                      value={form.clienteDocumento}
+                      onChange={(event) => setForm((prev) => ({ ...prev, clienteDocumento: event.target.value }))}
+                    />
+                  </Field>
+                  <Field>
+                    Nombre comprador
+                    <InputControl
+                      value={form.clienteNombre}
+                      onChange={(event) => setForm((prev) => ({ ...prev, clienteNombre: event.target.value }))}
+                    />
+                  </Field>
+                  <Field>
+                    Pais (buscar)
+                    <InputControl
+                      value={countryQuery}
+                      onChange={(event) => setCountryQuery(event.target.value)}
+                      placeholder="Buscar pais..."
+                    />
+                    <SelectControl
+                      value={form.clientePais}
+                      onChange={(event) => {
+                        setCityQuery('');
+                        setForm((prev) => ({ ...prev, clientePais: event.target.value, clienteCiudad: '' }));
+                      }}
+                    >
+                      {filteredCountryOptions.map((country) => (
+                        <option key={country.value} value={country.value}>
+                          {country.label}
+                        </option>
+                      ))}
+                    </SelectControl>
+                  </Field>
+                  <Field>
+                    Ciudad comprador
+                    <InputControl
+                      value={cityQuery}
+                      onChange={(event) => setCityQuery(event.target.value)}
+                      placeholder="Buscar ciudad..."
+                    />
+                    <SelectControl
+                      value={form.clienteCiudad}
+                      onChange={(event) => setForm((prev) => ({ ...prev, clienteCiudad: event.target.value }))}
+                    >
+                      <option value="">Selecciona ciudad</option>
+                      {cityOptions.map((city) => (
+                        <option key={city.value} value={city.value}>
+                          {city.label}
+                        </option>
+                      ))}
+                    </SelectControl>
+                  </Field>
+                  <Field>
+                    Envio
+                    <SelectControl
+                      value={form.envioResponsable}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          envioResponsable: event.target.value as SaleShippingResponsible,
+                        }))
+                      }
+                    >
+                      <option value="CLIENTE">Pagado por el cliente</option>
+                      <option value="NOSOTROS">Pagado por nosotros</option>
+                    </SelectControl>
+                  </Field>
+                </>
+              )}
 
               <Field>
                 Estado
                 <SelectControl
                   value={form.estado}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      estado: event.target.value as SaleForm['estado'],
-                    }))
-                  }
+                  onChange={(event) => setForm((prev) => ({ ...prev, estado: event.target.value as SaleForm['estado'] }))}
                 >
                   <option value="BORRADOR">BORRADOR</option>
                   <option value="CONFIRMADA">CONFIRMADA</option>
@@ -507,7 +607,6 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
                 <SelectControl
                   value={form.moneda}
                   onChange={(event) => setForm((prev) => ({ ...prev, moneda: event.target.value }))}
-                  required
                 >
                   {currencyOptions.map((currency) => (
                     <option key={currency.code} value={currency.code}>
@@ -518,26 +617,52 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
               </Field>
             </Fields>
 
-            <TotalsPanel>
-              <TotalsGrid>
-                <TotalCard>
-                  <p>Subtotal</p>
-                  <strong>{formatMoney(saleCalculation.subtotal, form.moneda)}</strong>
-                </TotalCard>
-                <TotalCard>
-                  <p>Descuento ({saleCalculation.descuentoPorcentaje.toFixed(2)}%)</p>
-                  <strong>{formatMoney(saleCalculation.descuentoValor, form.moneda)}</strong>
-                </TotalCard>
-                <TotalCard>
-                  <p>Impuestos</p>
-                  <strong>{formatMoney(saleCalculation.impuestos, form.moneda)}</strong>
-                </TotalCard>
-                <TotalCard $featured>
-                  <p>Total de venta</p>
-                  <strong>{formatMoney(saleCalculation.total, form.moneda)}</strong>
-                </TotalCard>
-              </TotalsGrid>
-            </TotalsPanel>
+            <Field>
+              Productos (seleccion multiple)
+              <ProductList>
+                {activeProducts.map((product) => {
+                  const line = lineByProductId[product.id] ?? { selected: false, cantidad: '' };
+                  return (
+                    <ProductRow key={product.id}>
+                      <input
+                        type="checkbox"
+                        checked={line.selected}
+                        onChange={(event) => handleLineToggle(product.id, event.target.checked)}
+                      />
+                      <div>{product.name}</div>
+                      <div className="line-price">{formatMoney(product.price, form.moneda)}</div>
+                      <InputControl
+                        className="line-qty"
+                        inputMode="decimal"
+                        value={line.cantidad}
+                        onChange={(event) => handleLineQty(product.id, event.target.value)}
+                        disabled={!line.selected}
+                        placeholder="Cantidad"
+                      />
+                    </ProductRow>
+                  );
+                })}
+              </ProductList>
+            </Field>
+
+            <TotalsRow>
+              <TotalCard>
+                <small>Productos</small>
+                <strong>{totals.products}</strong>
+              </TotalCard>
+              <TotalCard>
+                <small>Unidades</small>
+                <strong>{totals.units.toFixed(2)}</strong>
+              </TotalCard>
+              <TotalCard>
+                <small>Comision</small>
+                <strong>{formatMoney(totals.comision, form.moneda)}</strong>
+              </TotalCard>
+              <TotalCard>
+                <small>Total venta</small>
+                <strong>{formatMoney(totals.total, form.moneda)}</strong>
+              </TotalCard>
+            </TotalsRow>
 
             <Field>
               Fecha y hora de venta
@@ -551,11 +676,10 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
 
             <Fields>
               <Field>
-                Numero de comprobante (opcional)
+                Numero comprobante (opcional)
                 <InputControl
                   value={form.numeroComprobante}
                   onChange={(event) => setForm((prev) => ({ ...prev, numeroComprobante: event.target.value }))}
-                  placeholder="Ej: FAC-2026-00041"
                 />
               </Field>
               <Field>
@@ -563,7 +687,6 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
                 <TextAreaControl
                   value={form.observaciones}
                   onChange={(event) => setForm((prev) => ({ ...prev, observaciones: event.target.value }))}
-                  placeholder="Ej: Observaciones sobre la venta."
                 />
               </Field>
             </Fields>
@@ -579,12 +702,6 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
                 kind={friendlyAnnulError ? 'error' : 'info'}
                 message={friendlyAnnulError ?? 'Venta anulada correctamente.'}
               />
-            )}
-            {createStatus === 'success' && !editingSaleId && (
-              <StatusState kind="info" message="Venta registrada correctamente." />
-            )}
-            {updateStatus === 'success' && (
-              <StatusState kind="info" message="Venta actualizada correctamente." />
             )}
 
             <ButtonsRow>
@@ -609,128 +726,95 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
               message={friendlyLoadError ?? 'Error inesperado.'}
             />
           )}
-          {status === 'success' && sales.length === 0 && (
-            <StatusState kind="empty" message="No hay ventas registradas. Registra la primera en el formulario." />
+          {status === 'success' && visibleSales.length === 0 && (
+            <StatusState kind="empty" message="No hay ventas registradas." />
           )}
 
           {status === 'success' && sales.length > 0 && (
-            <>
-              <HistoryPanel>
-                <SummaryStrip>
-                  <SummaryChip>
-                    <p>Ventas visibles</p>
-                    <strong>{visibleSummary.totalVentas}</strong>
-                  </SummaryChip>
-                  <SummaryChip>
-                    <p>Unidades vendidas</p>
-                    <strong>{visibleSummary.totalUnidades}</strong>
-                  </SummaryChip>
-                  <SummaryChip>
-                    <p>Ingresos</p>
-                    <strong>{formatMoney(visibleSummary.totalIngresos)}</strong>
-                  </SummaryChip>
-                  <SummaryChip>
-                    <p>Ticket promedio</p>
-                    <strong>{formatMoney(visibleSummary.ticketPromedio)}</strong>
-                  </SummaryChip>
-                </SummaryStrip>
+            <Fields>
+              <Field>
+                Buscar en historial
+                <InputControl
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                  placeholder="Sucursal, producto, cliente o comprobante"
+                />
+              </Field>
+              <Field>
+                Estado
+                <SelectControl
+                  value={filterEstado}
+                  onChange={(event) => setFilterEstado(event.target.value as typeof filterEstado)}
+                >
+                  <option value="TODAS">TODAS</option>
+                  <option value="BORRADOR">BORRADOR</option>
+                  <option value="CONFIRMADA">CONFIRMADA</option>
+                  <option value="ANULADA">ANULADA</option>
+                </SelectControl>
+              </Field>
+            </Fields>
+          )}
 
-                <FilterBar>
-                  <Field>
-                    Buscar en historial
-                    <InputControl
-                      value={searchText}
-                      onChange={(event) => setSearchText(event.target.value)}
-                      placeholder="Busca sucursal, producto o comprobante"
-                    />
-                  </Field>
-                  <Field>
-                    Estado
-                    <SelectControl
-                      value={filterEstado}
-                      onChange={(event) => setFilterEstado(event.target.value as typeof filterEstado)}
-                    >
-                      <option value="TODAS">TODAS</option>
-                      <option value="BORRADOR">BORRADOR</option>
-                      <option value="CONFIRMADA">CONFIRMADA</option>
-                      <option value="ANULADA">ANULADA</option>
-                    </SelectControl>
-                  </Field>
-                </FilterBar>
-
-                {visibleSales.length === 0 ? (
-                  <StatusState kind="empty" message="No hay ventas que coincidan con tus filtros." />
-                ) : (
-                  <TableWrap>
-                    <DataTable>
-                      <thead>
-                        <tr>
-                          <th>Fecha</th>
-                          <th>Sucursal</th>
-                          <th>Producto</th>
-                          <th className="num">Cant.</th>
-                          <th className="hide-mobile">P. unit</th>
-                          <th className="hide-mobile">Subtotal</th>
-                          <th className="hide-mobile">Imp.</th>
-                          <th className="hide-mobile">Desc.</th>
-                          <th className="num">Total</th>
-                          <th className="hide-mobile">Comprobante</th>
-                          <th className="hide-mobile wrap">Observaciones</th>
-                          <th>Estado</th>
-                          <th className="actions">Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visibleSales.map((sale) => (
-                          <tr key={sale.id}>
-                            <td>{formatDateTime(sale.fecha)}</td>
-                            <td>{sale.localNombre}</td>
-                            <td>{sale.productoNombre}</td>
-                            <td className="num">{sale.cantidad}</td>
-                            <td className="hide-mobile num">{formatMoney(sale.precioUnitario, sale.moneda)}</td>
-                            <td className="hide-mobile num">{formatMoney(sale.subtotal, sale.moneda)}</td>
-                            <td className="hide-mobile num">{formatMoney(sale.impuestos, sale.moneda)}</td>
-                            <td className="hide-mobile num">
-                              {resolveDiscountPercentage(sale.subtotal, sale.descuento).toFixed(2)}%
-                              {' / '}
-                              {formatMoney(sale.descuento, sale.moneda)}
-                            </td>
-                            <td className="num">{formatMoney(sale.total, sale.moneda)}</td>
-                            <td className="hide-mobile">{sale.numeroComprobante ?? 'Sin comprobante'}</td>
-                            <td className="hide-mobile wrap">{sale.observaciones ?? 'Sin observaciones'}</td>
-                            <td>
-                              <Tag $tone={sale.estado === 'ANULADA' ? 'off' : sale.estado === 'BORRADOR' ? 'warn' : 'ok'}>
-                                {sale.estado}
-                              </Tag>
-                            </td>
-                            <td className="actions">
-                              <TableActions>
-                                <GhostButton
-                                  type="button"
-                                  onClick={() => handleStartEdit(sale)}
-                                  disabled={isSubmitting || annulStatus === 'submitting' || sale.estado === 'ANULADA'}
-                                >
-                                  Editar
-                                </GhostButton>
-                                <DangerButton
-                                  type="button"
-                                  onClick={() => handleAnnulSale(sale)}
-                                  disabled={annulStatus === 'submitting' || sale.estado === 'ANULADA'}
-                                >
-                                  {annulStatus === 'submitting' && annullingSaleId === sale.id
-                                    ? 'Anulando...'
-                                    : 'Anular'}
-                                </DangerButton>
-                              </TableActions>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </DataTable>
-                  </TableWrap>
-                )}
-              </HistoryPanel>
-            </>
+          {status === 'success' && visibleSales.length > 0 && (
+            <TableWrap>
+              <DataTable>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Canal / Cliente</th>
+                    <th>Producto</th>
+                    <th className="num">Cant.</th>
+                    <th className="hide-mobile num">Comision</th>
+                    <th className="num">Total</th>
+                    <th>Estado</th>
+                    <th className="actions">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleSales.map((sale) => (
+                    <tr key={sale.id}>
+                      <td>{formatDateTime(sale.fecha)}</td>
+                      <td>
+                        <Tag $tone={sale.tipoVenta === 'SUCURSAL' ? 'warn' : 'off'}>{sale.tipoVenta}</Tag>
+                      </td>
+                      <td>
+                        {sale.tipoVenta === 'SUCURSAL'
+                          ? sale.localNombre
+                          : `${sale.clienteNombre ?? 'Cliente'} (${sale.clienteDocumento ?? 'Sin documento'})`}
+                      </td>
+                      <td>{sale.productoNombre}</td>
+                      <td className="num">{sale.cantidad.toFixed(2)}</td>
+                      <td className="hide-mobile num">{formatMoney(sale.comisionValor, sale.moneda)}</td>
+                      <td className="num">{formatMoney(sale.total, sale.moneda)}</td>
+                      <td>
+                        <Tag $tone={sale.estado === 'ANULADA' ? 'off' : sale.estado === 'BORRADOR' ? 'warn' : 'ok'}>
+                          {sale.estado}
+                        </Tag>
+                      </td>
+                      <td className="actions">
+                        <ButtonsRow>
+                          <GhostButton
+                            type="button"
+                            onClick={() => handleStartEdit(sale)}
+                            disabled={isSubmitting || annulStatus === 'submitting' || sale.estado === 'ANULADA'}
+                          >
+                            Editar
+                          </GhostButton>
+                          <DangerButton
+                            type="button"
+                            onClick={() => handleAnnulSale(sale)}
+                            disabled={annulStatus === 'submitting' || sale.estado === 'ANULADA'}
+                          >
+                            {annulStatus === 'submitting' && annullingSaleId === sale.id ? 'Anulando...' : 'Anular'}
+                          </DangerButton>
+                        </ButtonsRow>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </DataTable>
+            </TableWrap>
           )}
         </>
       )}

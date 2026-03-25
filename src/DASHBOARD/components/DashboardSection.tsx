@@ -164,10 +164,6 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
   const friendlyShipmentsError = toFriendlySupabaseMessage(shipmentsError, 'envios');
   const friendlyBranchesError = toFriendlySupabaseMessage(branchesError, 'sucursales');
 
-  const branchCommissionById = useMemo(
-    () => new Map(branches.map((branch) => [branch.id, branch.porcentajeComision])),
-    [branches],
-  );
   const branchNameById = useMemo(
     () => new Map(branches.map((branch) => [branch.id, branch.nombre])),
     [branches],
@@ -175,23 +171,26 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
 
   const records = useMemo<CommercialRecord[]>(() => {
     const fromSales: CommercialRecord[] = sales.map((sale) => {
-      const commissionPct = branchCommissionById.get(sale.localId) ?? 0;
-      const gross = sale.total;
-      const commission = (gross * commissionPct) / 100;
+      const channel = sale.tipoVenta === 'SUCURSAL' ? 'TIENDA' : 'DIRECTO';
       return {
         id: `VENTA-${sale.id}`,
         source: 'VENTA',
-        channel: 'TIENDA',
+        channel,
         date: sale.fecha,
         branchId: sale.localId,
-        branchName: sale.localNombre,
+        branchName:
+          sale.tipoVenta === 'SUCURSAL'
+            ? sale.localNombre
+            : sale.clienteNombre
+              ? `${sale.clienteNombre} (individual)`
+              : 'Venta individual',
         productId: sale.productoId,
         productName: sale.productoNombre,
         units: sale.cantidad,
-        gross,
-        commission,
+        gross: sale.subtotal,
+        commission: sale.comisionValor,
         shippingCost: 0,
-        net: gross - commission,
+        net: sale.total,
       };
     });
 
@@ -201,18 +200,18 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
       channel: shipment.canalVenta,
       date: shipment.fechaEnvio,
       branchId: shipment.localId,
-      branchName: shipment.localNombre,
+      branchName: shipment.tipoEnvio === 'SUCURSAL' ? shipment.localNombre : shipment.destinatario,
       productId: shipment.productoId,
       productName: shipment.productoNombre,
       units: shipment.cantidad,
-      gross: shipment.ingresoBruto,
-      commission: shipment.comisionValor,
+      gross: 0,
+      commission: 0,
       shippingCost: shipment.costoEnvio,
-      net: shipment.gananciaNeta,
+      net: -shipment.costoEnvio,
     }));
 
     return [...fromSales, ...fromShipments];
-  }, [branchCommissionById, sales, shipments]);
+  }, [sales, shipments]);
 
   const productOptions = useMemo(
     () =>
@@ -580,4 +579,3 @@ export function DashboardSection({ refreshKey }: DashboardSectionProps) {
     </SectionCard>
   );
 }
-

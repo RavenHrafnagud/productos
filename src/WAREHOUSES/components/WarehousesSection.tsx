@@ -60,6 +60,8 @@ interface WarehouseForm {
   nit: string;
   nombre: string;
   direccion: string;
+  barrio: string;
+  municipio: string;
   ciudad: string;
   pais: string;
   telefono: string;
@@ -80,6 +82,8 @@ const EMPTY_WAREHOUSE_FORM: WarehouseForm = {
   nit: '',
   nombre: '',
   direccion: '',
+  barrio: '',
+  municipio: '',
   ciudad: '',
   pais: 'CO',
   telefono: '',
@@ -201,6 +205,7 @@ export function WarehousesSection({
   const [deletingInventoryId, setDeletingInventoryId] = useState<string | null>(null);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
   const [collapsed, setCollapsed] = useState(false);
+  const [countryQuery, setCountryQuery] = useState('');
   const [cityQuery, setCityQuery] = useState('');
 
   const {
@@ -227,6 +232,21 @@ export function WarehousesSection({
   const friendlyInventoryDeleteError = toFriendlySupabaseMessage(deleteInventoryError, 'almacen');
 
   const countryOptions = useMemo(() => getCountryOptions(), []);
+  const filteredCountryOptions = useMemo(() => {
+    const query = countryQuery
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+    if (!query) return countryOptions;
+    return countryOptions.filter((country) =>
+      country.label
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [countryOptions, countryQuery]);
   const cityOptions = useMemo(
     () => getCityOptionsByCountry(form.pais, { query: cityQuery }),
     [cityQuery, form.pais],
@@ -282,6 +302,8 @@ export function WarehousesSection({
       nit: sanitizeText(form.nit, 30),
       nombre: sanitizeText(form.nombre, 90),
       direccion: sanitizeText(form.direccion, 140),
+      barrio: sanitizeText(form.barrio, 90),
+      municipio: sanitizeText(form.municipio, 90),
       ciudad: sanitizeText(form.ciudad, 80),
       pais: sanitizeText(form.pais, 40) || 'CO',
       telefono: sanitizeText(form.telefono, 25),
@@ -313,6 +335,7 @@ export function WarehousesSection({
         await onCreateWarehouse(payload);
       }
       setForm(EMPTY_WAREHOUSE_FORM);
+      setCountryQuery('');
       setCityQuery('');
     } catch {
       // Error detallado por createError/updateError.
@@ -326,6 +349,8 @@ export function WarehousesSection({
       nit: warehouse.nit ?? '',
       nombre: warehouse.nombre,
       direccion: warehouse.direccion ?? '',
+      barrio: warehouse.barrio ?? '',
+      municipio: warehouse.municipio ?? '',
       ciudad: warehouse.ciudad ?? '',
       pais: warehouse.pais,
       telefono: warehouse.telefono ?? '',
@@ -342,6 +367,7 @@ export function WarehousesSection({
     setEditingWarehouseId(null);
     setFormError(null);
     setForm(EMPTY_WAREHOUSE_FORM);
+    setCountryQuery('');
     setCityQuery('');
   };
 
@@ -499,6 +525,11 @@ export function WarehousesSection({
               </Field>
               <Field>
                 Pais
+                <CompactSearchInput
+                  value={countryQuery}
+                  onChange={(event) => setCountryQuery(event.target.value)}
+                  placeholder="Buscar pais..."
+                />
                 <CompactCountrySelect
                   value={form.pais}
                   onChange={(event) => {
@@ -506,7 +537,7 @@ export function WarehousesSection({
                     setForm((prev) => ({ ...prev, pais: event.target.value, ciudad: '' }));
                   }}
                 >
-                  {countryOptions.map((country) => (
+                  {filteredCountryOptions.map((country) => (
                     <option key={country.value} value={country.value}>
                       {country.label}
                     </option>
@@ -538,6 +569,22 @@ export function WarehousesSection({
                     ? `Mostrando ${cityOptions.length} de ${cityTotal} ciudades disponibles.${cityHasMore ? ' Escribe 2 letras para afinar y ver mas resultados.' : ''}`
                     : 'Selecciona un pais para cargar ciudades.'}
                 </FieldHint>
+              </Field>
+              <Field>
+                Barrio
+                <InputControl
+                  value={form.barrio}
+                  onChange={(event) => setForm((prev) => ({ ...prev, barrio: event.target.value }))}
+                  placeholder="Ej: Fontibon"
+                />
+              </Field>
+              <Field>
+                Municipio
+                <InputControl
+                  value={form.municipio}
+                  onChange={(event) => setForm((prev) => ({ ...prev, municipio: event.target.value }))}
+                  placeholder="Ej: Cota"
+                />
               </Field>
               <Field>
                 Direccion
@@ -673,6 +720,8 @@ export function WarehousesSection({
                     <thead>
                       <tr>
                         <th>Almacen</th>
+                        <th className="hide-mobile">Barrio</th>
+                        <th className="hide-mobile">Municipio</th>
                         <th className="hide-mobile">Ciudad</th>
                         <th className="hide-mobile">Pais</th>
                         <th>Tipo</th>
@@ -686,6 +735,8 @@ export function WarehousesSection({
                       {warehouses.map((warehouse) => (
                         <tr key={warehouse.id}>
                           <td>{warehouse.nombre}</td>
+                          <td className="hide-mobile">{warehouse.barrio ?? 'Sin barrio'}</td>
+                          <td className="hide-mobile">{warehouse.municipio ?? 'Sin municipio'}</td>
                           <td className="hide-mobile">{warehouse.ciudad ?? 'Sin ciudad'}</td>
                           <td className="hide-mobile">{warehouse.pais}</td>
                           <td>

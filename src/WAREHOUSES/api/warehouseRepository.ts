@@ -14,10 +14,19 @@ import type {
 } from '../types/Warehouse';
 
 const WAREHOUSE_SELECT_WITH_STATUS =
-  'id, nit, nombre, direccion, ciudad, pais, telefono, email, es_propio, costo_arriendo, moneda, estado, created_at';
+  'id, nit, nombre, direccion, barrio, municipio, ciudad, pais, telefono, email, es_propio, costo_arriendo, moneda, estado, created_at';
 const WAREHOUSE_SELECT_WITH_ACTIVE =
+  'id, nit, nombre, direccion, barrio, municipio, ciudad, pais, telefono, email, es_propio, costo_arriendo, moneda, activo, created_at';
+const WAREHOUSE_SELECT_WITH_STATUS_LEGACY =
+  'id, nit, nombre, direccion, ciudad, pais, telefono, email, es_propio, costo_arriendo, moneda, estado, created_at';
+const WAREHOUSE_SELECT_WITH_ACTIVE_LEGACY =
   'id, nit, nombre, direccion, ciudad, pais, telefono, email, es_propio, costo_arriendo, moneda, activo, created_at';
-const WAREHOUSE_SELECT_ATTEMPTS = [WAREHOUSE_SELECT_WITH_STATUS, WAREHOUSE_SELECT_WITH_ACTIVE];
+const WAREHOUSE_SELECT_ATTEMPTS = [
+  WAREHOUSE_SELECT_WITH_STATUS,
+  WAREHOUSE_SELECT_WITH_ACTIVE,
+  WAREHOUSE_SELECT_WITH_STATUS_LEGACY,
+  WAREHOUSE_SELECT_WITH_ACTIVE_LEGACY,
+];
 
 function toNumber(value: number | string | null | undefined) {
   if (value === null || value === undefined) return 0;
@@ -25,7 +34,7 @@ function toNumber(value: number | string | null | undefined) {
 }
 
 function isCompatibilityColumnError(rawError: string) {
-  return /does not exist/i.test(rawError) && /(estado|activo|es_propio|costo_arriendo|moneda)/i.test(rawError);
+  return /does not exist/i.test(rawError) && /(estado|activo|es_propio|costo_arriendo|moneda|barrio|municipio)/i.test(rawError);
 }
 
 type WarehouseRow = {
@@ -33,6 +42,8 @@ type WarehouseRow = {
   nit?: string | null;
   nombre: string;
   direccion?: string | null;
+  barrio?: string | null;
+  municipio?: string | null;
   ciudad?: string | null;
   pais?: string | null;
   telefono?: string | null;
@@ -51,6 +62,8 @@ function mapWarehouse(row: WarehouseRow): Warehouse {
     nit: row.nit ?? null,
     nombre: row.nombre,
     direccion: row.direccion ?? null,
+    barrio: row.barrio ?? null,
+    municipio: row.municipio ?? null,
     ciudad: row.ciudad ?? null,
     pais: row.pais ?? 'CO',
     telefono: row.telefono ?? null,
@@ -125,6 +138,8 @@ function normalizeWarehouseInput(input: CreateWarehouseInput | UpdateWarehouseIn
     nit: sanitizeText(input.nit, 30) || null,
     nombre: sanitizeText(input.nombre, 90),
     direccion: sanitizeText(input.direccion, 140) || null,
+    barrio: sanitizeText(input.barrio, 90) || null,
+    municipio: sanitizeText(input.municipio, 90) || null,
     ciudad: sanitizeText(input.ciudad, 80) || null,
     pais: sanitizeText(input.pais, 40) || 'CO',
     telefono: sanitizeText(input.telefono, 25) || null,
@@ -150,6 +165,36 @@ export async function createWarehouse(input: CreateWarehouseInput): Promise<Ware
   const supabase = getSupabaseClient();
   const payload = normalizeWarehouseInput(input);
   const attempts = [
+    {
+      nit: payload.nit,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      barrio: payload.barrio,
+      municipio: payload.municipio,
+      ciudad: payload.ciudad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      es_propio: payload.es_propio,
+      costo_arriendo: payload.costo_arriendo,
+      moneda: payload.moneda,
+      estado: payload.estado,
+    },
+    {
+      nit: payload.nit,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      barrio: payload.barrio,
+      municipio: payload.municipio,
+      ciudad: payload.ciudad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      es_propio: payload.es_propio,
+      costo_arriendo: payload.costo_arriendo,
+      moneda: payload.moneda,
+      activo: payload.activo,
+    },
     {
       nit: payload.nit,
       nombre: payload.nombre,
@@ -207,6 +252,36 @@ export async function updateWarehouse(warehouseId: string, input: UpdateWarehous
 
   const payload = normalizeWarehouseInput(input);
   const attempts = [
+    {
+      nit: payload.nit,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      barrio: payload.barrio,
+      municipio: payload.municipio,
+      ciudad: payload.ciudad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      es_propio: payload.es_propio,
+      costo_arriendo: payload.costo_arriendo,
+      moneda: payload.moneda,
+      estado: payload.estado,
+    },
+    {
+      nit: payload.nit,
+      nombre: payload.nombre,
+      direccion: payload.direccion,
+      barrio: payload.barrio,
+      municipio: payload.municipio,
+      ciudad: payload.ciudad,
+      pais: payload.pais,
+      telefono: payload.telefono,
+      email: payload.email,
+      es_propio: payload.es_propio,
+      costo_arriendo: payload.costo_arriendo,
+      moneda: payload.moneda,
+      activo: payload.activo,
+    },
     {
       nit: payload.nit,
       nombre: payload.nombre,
