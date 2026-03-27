@@ -78,6 +78,10 @@ export function toFriendlySupabaseMessage(
     return 'Falta el modulo de almacenes y su trazabilidad. Ejecuta database/027_almacenes_traceability.sql en Supabase.';
   }
 
+  if (/column .*localidad|almacenes_localidad_idx|operaciones\.almacenes.+(barrio|municipio)/i.test(rawError)) {
+    return 'Falta la unificacion de localidad en almacenes. Ejecuta database/034_merge_warehouse_barrio_municipio.sql en Supabase.';
+  }
+
   if (/tipo_venta|referencia_grupo|requiere_envio|envio_registrado|tipo_envio|referencia_venta_grupo|cliente_documento|cliente_nombre|barrio|municipio|ventas_almacen_id_fkey|column .*almacen_id|descuento_porcentaje|descuento_valor/i.test(rawError)) {
     return 'Falta la migracion del flujo comercial actualizado. Ejecuta database/031_business_flow_sales_shipments_warehouses.sql, database/032_sales_individual_from_warehouse.sql y database/033_sales_discount_fields.sql en Supabase.';
   }

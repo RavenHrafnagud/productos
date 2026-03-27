@@ -6,8 +6,7 @@ export interface Warehouse {
   nit: string | null;
   nombre: string;
   direccion: string | null;
-  barrio: string | null;
-  municipio: string | null;
+  localidad: string | null;
   ciudad: string | null;
   pais: string;
   telefono: string | null;
@@ -23,8 +22,7 @@ export interface CreateWarehouseInput {
   nit: string;
   nombre: string;
   direccion: string;
-  barrio: string;
-  municipio: string;
+  localidad: string;
   ciudad: string;
   pais: string;
   telefono: string;

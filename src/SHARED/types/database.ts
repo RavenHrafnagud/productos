@@ -122,6 +122,7 @@ export interface Database {
           nit: string | null;
           nombre: string;
           direccion: string | null;
+          localidad: string | null;
           ciudad: string | null;
           pais: string;
           telefono: string | null;
@@ -138,6 +139,7 @@ export interface Database {
           nit?: string | null;
           nombre: string;
           direccion?: string | null;
+          localidad?: string | null;
           ciudad?: string | null;
           pais?: string;
           telefono?: string | null;
