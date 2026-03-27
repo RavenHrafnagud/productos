@@ -6,6 +6,7 @@ import { listBranches } from '../../BRANCHES/api/branchRepository';
 import { getProductsByIds } from '../../PRODUCTS/api/productRepository';
 import { getSupabaseClient } from '../../SHARED/lib/supabase/client';
 import { sanitizeText } from '../../SHARED/utils/validators';
+import { listWarehouses } from '../../WAREHOUSES/api/warehouseRepository';
 import type {
   CreateSaleInput,
   CreateSaleLineInput,
@@ -17,20 +18,21 @@ import type {
 } from '../types/Sale';
 
 const SALES_SELECT_FULL =
-  'id, referencia_grupo, tipo_venta, local_id, usuario_id, producto_id, cantidad, precio_unitario, subtotal, impuestos, descuento, total, comision_porcentaje, comision_valor, cliente_documento, cliente_nombre, cliente_pais, cliente_ciudad, envio_responsable, requiere_envio, envio_registrado, fecha, estado, moneda, numero_comprobante, observaciones';
+  'id, referencia_grupo, tipo_venta, local_id, almacen_id, usuario_id, producto_id, cantidad, precio_unitario, subtotal, impuestos, descuento, descuento_porcentaje, descuento_valor, total, comision_porcentaje, comision_valor, cliente_documento, cliente_nombre, cliente_pais, cliente_ciudad, envio_responsable, requiere_envio, envio_registrado, fecha, estado, moneda, numero_comprobante, observaciones';
 const SALES_SELECT_NO_NEW_COLUMNS =
   'id, local_id, usuario_id, producto_id, cantidad, precio_unitario, subtotal, impuestos, descuento, total, fecha, estado, moneda, numero_comprobante, observaciones';
 const SALES_SELECT_NO_MONEDA =
   'id, local_id, usuario_id, producto_id, cantidad, precio_unitario, subtotal, impuestos, descuento, total, fecha, estado, numero_comprobante, observaciones';
 
 const COMPATIBILITY_MIGRATION_HINT =
-  'Ejecuta database/031_business_flow_sales_shipments_warehouses.sql en Supabase para habilitar el flujo de ventas multiproducto.';
+  'Ejecuta database/031_business_flow_sales_shipments_warehouses.sql, database/032_sales_individual_from_warehouse.sql y database/033_sales_discount_fields.sql en Supabase para habilitar el flujo comercial completo.';
 
 type SaleRow = {
   id: string;
   referencia_grupo?: string | null;
   tipo_venta?: string | null;
   local_id?: string | null;
+  almacen_id?: string | null;
   usuario_id?: string | null;
   producto_id?: string | null;
   cantidad?: number | string | null;
@@ -38,6 +40,8 @@ type SaleRow = {
   subtotal?: number | string | null;
   impuestos?: number | string | null;
   descuento?: number | string | null;
+  descuento_porcentaje?: number | string | null;
+  descuento_valor?: number | string | null;
   total?: number | string | null;
   comision_porcentaje?: number | string | null;
   comision_valor?: number | string | null;
@@ -65,6 +69,39 @@ function clampPercent(value: number) {
   return Math.min(100, Math.max(0, value));
 }
 
+function round2(value: number) {
+  return Number(value.toFixed(2));
+}
+
+function splitAmountBySubtotal(
+  lineItems: Array<{ cantidad: number; precioUnitario: number }>,
+  totalAmount: number,
+) {
+  if (lineItems.length === 0) return [];
+  const safeTotal = round2(Math.max(0, totalAmount));
+  if (safeTotal === 0) return lineItems.map(() => 0);
+
+  const subtotalByLine = lineItems.map((line) => round2(line.cantidad * line.precioUnitario));
+  const grandSubtotal = subtotalByLine.reduce((sum, value) => sum + value, 0);
+  if (grandSubtotal <= 0) return lineItems.map(() => 0);
+
+  const parts: number[] = [];
+  let assigned = 0;
+  for (let index = 0; index < lineItems.length; index += 1) {
+    if (index === lineItems.length - 1) {
+      const remainder = round2(safeTotal - assigned);
+      parts.push(remainder >= 0 ? remainder : 0);
+      continue;
+    }
+
+    const proportional = round2((safeTotal * subtotalByLine[index]) / grandSubtotal);
+    parts.push(proportional);
+    assigned = round2(assigned + proportional);
+  }
+
+  return parts;
+}
+
 function normalizeSaleType(value: string | null | undefined, localId: string | null | undefined): SaleType {
   const normalized = value?.trim().toUpperCase();
   if (normalized === 'INDIVIDUAL') return 'INDIVIDUAL';
@@ -87,12 +124,13 @@ function normalizeShippingResponsible(value: string | null | undefined): SaleShi
 }
 
 function isCompatibilityColumnError(rawError: string) {
-  return /does not exist/i.test(rawError) && /(usuario_id|producto_id|cantidad|precio_unitario|subtotal|impuestos|descuento|estado|moneda|total|numero_comprobante|observaciones|tipo_venta|referencia_grupo|cliente_documento|envio_responsable|requiere_envio|envio_registrado|comision_porcentaje|comision_valor)/i.test(rawError);
+  return /does not exist/i.test(rawError) && /(usuario_id|producto_id|cantidad|precio_unitario|subtotal|impuestos|descuento|descuento_porcentaje|descuento_valor|estado|moneda|total|numero_comprobante|observaciones|tipo_venta|referencia_grupo|cliente_documento|envio_responsable|requiere_envio|envio_registrado|comision_porcentaje|comision_valor|almacen_id)/i.test(rawError);
 }
 
 function mapSale(
   row: SaleRow,
   branchNames: Map<string, string>,
+  warehouseNames: Map<string, string>,
   productNames: Map<string, string>,
   userNames: Map<string, string>,
 ): SaleRecord {
@@ -103,9 +141,24 @@ function mapSale(
   const descuento = toNumber(row.descuento);
   const total = toNumber(row.total) || subtotal + impuestos - descuento;
   const tipoVenta = normalizeSaleType(row.tipo_venta, row.local_id ?? null);
+  const comisionValorRaw = toNumber(row.comision_valor);
+  const comisionPorcentajeRaw = toNumber(row.comision_porcentaje);
+  const descuentoValorRaw = toNumber(row.descuento_valor);
+  const descuentoPorcentajeRaw = toNumber(row.descuento_porcentaje);
+  const comisionValor = comisionValorRaw > 0 ? comisionValorRaw : 0;
+  const descuentoValor = descuentoValorRaw > 0 ? descuentoValorRaw : Math.max(descuento - comisionValor, 0);
   const comisionPorcentaje =
-    toNumber(row.comision_porcentaje) || (subtotal > 0 ? clampPercent((descuento / subtotal) * 100) : 0);
-  const comisionValor = toNumber(row.comision_valor) || descuento;
+    comisionPorcentajeRaw > 0
+      ? clampPercent(comisionPorcentajeRaw)
+      : subtotal > 0
+        ? clampPercent((comisionValor / subtotal) * 100)
+        : 0;
+  const descuentoPorcentaje =
+    descuentoPorcentajeRaw > 0
+      ? clampPercent(descuentoPorcentajeRaw)
+      : subtotal > 0
+        ? clampPercent((descuentoValor / subtotal) * 100)
+        : 0;
   const localNameFallback = tipoVenta === 'INDIVIDUAL' ? 'Venta individual' : 'Sucursal no encontrada';
 
   return {
@@ -114,6 +167,10 @@ function mapSale(
     tipoVenta,
     localId: row.local_id ?? null,
     localNombre: row.local_id ? branchNames.get(row.local_id) ?? localNameFallback : localNameFallback,
+    almacenId: row.almacen_id ?? null,
+    almacenNombre: row.almacen_id
+      ? warehouseNames.get(row.almacen_id) ?? 'Almacen no encontrado'
+      : 'Sin almacen',
     usuarioId: row.usuario_id ?? '',
     usuarioNombre: row.usuario_id ? userNames.get(row.usuario_id) ?? 'Usuario no encontrado' : 'Sin usuario',
     productoId: row.producto_id ?? null,
@@ -123,6 +180,8 @@ function mapSale(
     subtotal,
     impuestos,
     descuento,
+    descuentoPorcentaje,
+    descuentoValor,
     total,
     comisionPorcentaje,
     comisionValor,
@@ -233,6 +292,15 @@ async function getUserNamesByIds(userIds: string[]) {
   );
 }
 
+async function getWarehouseNames() {
+  try {
+    const warehouses = await listWarehouses();
+    return new Map(warehouses.map((warehouse) => [warehouse.id, warehouse.nombre]));
+  } catch {
+    return new Map<string, string>();
+  }
+}
+
 function generateReferenceGroup() {
   if (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function') {
     return globalThis.crypto.randomUUID();
@@ -255,6 +323,7 @@ export async function listSales(limit = 120): Promise<SaleRecord[]> {
   const rows = await loadSalesRows(limit);
   const branches = await listBranches();
   const branchNames = new Map(branches.map((branch) => [branch.id, branch.nombre]));
+  const warehouseNames = await getWarehouseNames();
   const productIds = [...new Set(rows.map((row) => row.producto_id).filter((id): id is string => Boolean(id)))];
   const productsById = await getProductsByIds(productIds);
   const productNames = new Map<string, string>(
@@ -263,7 +332,7 @@ export async function listSales(limit = 120): Promise<SaleRecord[]> {
   const userIds = [...new Set(rows.map((row) => row.usuario_id).filter((id): id is string => Boolean(id)))];
   const userNames = await getUserNamesByIds(userIds);
 
-  return rows.map((row) => mapSale(row, branchNames, productNames, userNames));
+  return rows.map((row) => mapSale(row, branchNames, warehouseNames, productNames, userNames));
 }
 
 export async function createSale(input: CreateSaleInput): Promise<SaleRecord[]> {
@@ -281,6 +350,7 @@ export async function createSale(input: CreateSaleInput): Promise<SaleRecord[]> 
 
   const saleType = input.tipoVenta;
   const localId = input.localId?.trim() || null;
+  const warehouseId = input.almacenId?.trim() || null;
   if (saleType === 'SUCURSAL' && !localId) {
     throw new Error('Debes seleccionar una sucursal para ventas tipo sucursal.');
   }
@@ -292,6 +362,9 @@ export async function createSale(input: CreateSaleInput): Promise<SaleRecord[]> 
   const envioResponsable = input.envioResponsable ?? null;
 
   if (saleType === 'INDIVIDUAL') {
+    if (!warehouseId) {
+      throw new Error('Para venta individual debes seleccionar el almacen de origen.');
+    }
     if (!clienteDocumento || !clienteNombre || !clientePais || !clienteCiudad) {
       throw new Error('Para venta individual debes completar cedula, nombre, pais y ciudad del comprador.');
     }
@@ -301,26 +374,37 @@ export async function createSale(input: CreateSaleInput): Promise<SaleRecord[]> 
   }
 
   const commissionPercentage = saleType === 'SUCURSAL' ? clampPercent(input.comisionPorcentaje) : 0;
+  const discountPercentage = clampPercent(input.descuentoPorcentaje);
   const referenceGroup = generateReferenceGroup();
   const cleanComprobante = sanitizeText(input.numeroComprobante, 80) || null;
   const cleanObservaciones = sanitizeText(input.observaciones, 220) || null;
   const saleDateIso = new Date(input.fecha).toISOString();
   const requiresShipping = saleType === 'INDIVIDUAL' && envioResponsable === 'NOSOTROS';
+  const subtotalTotal = lineItems.reduce((sum, line) => sum + line.cantidad * line.precioUnitario, 0);
+  const totalCommissionValue = round2((subtotalTotal * commissionPercentage) / 100);
+  const totalDiscountValue = round2((subtotalTotal * discountPercentage) / 100);
+  const commissionByLine = splitAmountBySubtotal(lineItems, totalCommissionValue);
+  const discountByLine = splitAmountBySubtotal(lineItems, totalDiscountValue);
 
-  const rowsToInsert = lineItems.map((line) => {
-    const subtotal = Number((line.cantidad * line.precioUnitario).toFixed(2));
-    const comisionValor = Number(((subtotal * commissionPercentage) / 100).toFixed(2));
+  const rowsToInsert = lineItems.map((line, index) => {
+    const subtotal = round2(line.cantidad * line.precioUnitario);
+    const comisionValor = commissionByLine[index] ?? 0;
+    const descuentoValor = discountByLine[index] ?? 0;
+    const descuentoTotal = round2(comisionValor + descuentoValor);
     return {
       referencia_grupo: referenceGroup,
       tipo_venta: saleType,
       local_id: saleType === 'SUCURSAL' ? localId : null,
+      almacen_id: saleType === 'INDIVIDUAL' ? warehouseId : null,
       usuario_id: authUserId,
       producto_id: line.productoId,
       cantidad: Number(line.cantidad.toFixed(2)),
       precio_unitario: Number(line.precioUnitario.toFixed(2)),
       subtotal,
       impuestos: 0,
-      descuento: comisionValor,
+      descuento: descuentoTotal,
+      descuento_porcentaje: discountPercentage,
+      descuento_valor: descuentoValor,
       comision_porcentaje: commissionPercentage,
       comision_valor: comisionValor,
       cliente_documento: saleType === 'INDIVIDUAL' ? clienteDocumento : null,
@@ -359,6 +443,7 @@ export async function createSale(input: CreateSaleInput): Promise<SaleRecord[]> 
 
   const branches = await listBranches();
   const branchNames = new Map(branches.map((branch) => [branch.id, branch.nombre]));
+  const warehouseNames = await getWarehouseNames();
   const productIds = [...new Set(createdRows.map((row) => row.producto_id).filter((id): id is string => Boolean(id)))];
   const productsById = await getProductsByIds(productIds);
   const productNames = new Map<string, string>(
@@ -367,7 +452,7 @@ export async function createSale(input: CreateSaleInput): Promise<SaleRecord[]> 
   const userIds = [...new Set(createdRows.map((row) => row.usuario_id).filter((id): id is string => Boolean(id)))];
   const userNames = await getUserNamesByIds(userIds);
 
-  return createdRows.map((row) => mapSale(row, branchNames, productNames, userNames));
+  return createdRows.map((row) => mapSale(row, branchNames, warehouseNames, productNames, userNames));
 }
 
 function toIsoNow() {
@@ -425,20 +510,27 @@ export async function updateSale(saleId: string, input: UpdateSaleInput): Promis
 
   const actor = await resolveActorLabel();
   const subtotal = input.cantidad * input.precioUnitario;
-  const comisionPorcentaje = clampPercent(subtotal > 0 ? (input.descuento / subtotal) * 100 : 0);
+  const comisionPorcentaje = clampPercent(input.comisionPorcentaje);
+  const descuentoPorcentaje = clampPercent(input.descuentoPorcentaje);
+  const comisionValor = round2((subtotal * comisionPorcentaje) / 100);
+  const descuentoValor = round2((subtotal * descuentoPorcentaje) / 100);
+  const descuentoTotal = round2(comisionValor + descuentoValor);
   const observaciones = composeAuditNote(previous.observaciones ?? null, input.observaciones, 'EDITADA', actor);
 
   const payloads: Array<Record<string, string | number | null | boolean>> = [
     {
       local_id: input.localId,
+      almacen_id: input.almacenId,
       producto_id: input.productoId,
       cantidad: input.cantidad,
       precio_unitario: input.precioUnitario,
       subtotal,
       impuestos: input.impuestos,
-      descuento: input.descuento,
+      descuento: descuentoTotal,
+      descuento_porcentaje: descuentoPorcentaje,
+      descuento_valor: descuentoValor,
       comision_porcentaje: comisionPorcentaje,
-      comision_valor: input.descuento,
+      comision_valor: comisionValor,
       fecha: input.fecha,
       estado: input.estado,
       moneda: input.moneda,
@@ -448,12 +540,13 @@ export async function updateSale(saleId: string, input: UpdateSaleInput): Promis
     },
     {
       local_id: input.localId,
+      almacen_id: input.almacenId,
       producto_id: input.productoId,
       cantidad: input.cantidad,
       precio_unitario: input.precioUnitario,
       subtotal,
       impuestos: input.impuestos,
-      descuento: input.descuento,
+      descuento: descuentoTotal,
       fecha: input.fecha,
       estado: input.estado,
       moneda: input.moneda,
@@ -462,12 +555,13 @@ export async function updateSale(saleId: string, input: UpdateSaleInput): Promis
     },
     {
       local_id: input.localId,
+      almacen_id: input.almacenId,
       producto_id: input.productoId,
       cantidad: input.cantidad,
       precio_unitario: input.precioUnitario,
       subtotal,
       impuestos: input.impuestos,
-      descuento: input.descuento,
+      descuento: descuentoTotal,
       fecha: input.fecha,
       estado: input.estado,
       numero_comprobante: sanitizeText(input.numeroComprobante, 80) || null,
@@ -482,13 +576,14 @@ export async function updateSale(saleId: string, input: UpdateSaleInput): Promis
 
   const branches = await listBranches();
   const branchNames = new Map(branches.map((branch) => [branch.id, branch.nombre]));
+  const warehouseNames = await getWarehouseNames();
   const productsById = updated.producto_id ? await getProductsByIds([updated.producto_id]) : new Map();
   const productNames = new Map<string, string>(
     [...productsById.entries()].map(([id, product]) => [id, product.nombre]),
   );
   const userNames = await getUserNamesByIds(updated.usuario_id ? [updated.usuario_id] : []);
 
-  return mapSale(updated, branchNames, productNames, userNames);
+  return mapSale(updated, branchNames, warehouseNames, productNames, userNames);
 }
 
 export async function annulSale(saleId: string): Promise<SaleRecord> {
@@ -516,11 +611,12 @@ export async function annulSale(saleId: string): Promise<SaleRecord> {
 
   const branches = await listBranches();
   const branchNames = new Map(branches.map((branch) => [branch.id, branch.nombre]));
+  const warehouseNames = await getWarehouseNames();
   const productsById = updated.producto_id ? await getProductsByIds([updated.producto_id]) : new Map();
   const productNames = new Map<string, string>(
     [...productsById.entries()].map(([id, product]) => [id, product.nombre]),
   );
   const userNames = await getUserNamesByIds(updated.usuario_id ? [updated.usuario_id] : []);
 
-  return mapSale(updated, branchNames, productNames, userNames);
+  return mapSale(updated, branchNames, warehouseNames, productNames, userNames);
 }

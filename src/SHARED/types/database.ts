@@ -242,25 +242,65 @@ export interface Database {
       ventas: TableShape<
         {
           id: string;
-          local_id: string;
+          referencia_grupo: string | null;
+          tipo_venta: 'SUCURSAL' | 'INDIVIDUAL';
+          local_id: string | null;
+          almacen_id: string | null;
+          usuario_id: string;
+          cliente_documento: string | null;
+          cliente_nombre: string | null;
+          cliente_pais: string | null;
+          cliente_ciudad: string | null;
+          envio_responsable: 'CLIENTE' | 'NOSOTROS' | null;
+          requiere_envio: boolean;
+          envio_registrado: boolean;
+          comision_porcentaje: number;
+          comision_valor: number;
           producto_id: string | null;
           cantidad: number | null;
           precio_unitario: number | null;
+          subtotal: number;
+          impuestos: number;
+          descuento: number;
+          descuento_porcentaje: number;
+          descuento_valor: number;
           fecha: string;
           estado: 'BORRADOR' | 'CONFIRMADA' | 'ANULADA';
           total: number;
           moneda: string;
+          numero_comprobante: string | null;
+          observaciones: string | null;
         },
         {
           id?: string;
-          local_id: string;
+          referencia_grupo?: string | null;
+          tipo_venta?: 'SUCURSAL' | 'INDIVIDUAL';
+          local_id?: string | null;
+          almacen_id?: string | null;
+          usuario_id?: string;
+          cliente_documento?: string | null;
+          cliente_nombre?: string | null;
+          cliente_pais?: string | null;
+          cliente_ciudad?: string | null;
+          envio_responsable?: 'CLIENTE' | 'NOSOTROS' | null;
+          requiere_envio?: boolean;
+          envio_registrado?: boolean;
+          comision_porcentaje?: number;
+          comision_valor?: number;
           producto_id?: string | null;
           cantidad?: number | null;
           precio_unitario?: number | null;
+          subtotal?: number;
+          impuestos?: number;
+          descuento?: number;
+          descuento_porcentaje?: number;
+          descuento_valor?: number;
           fecha?: string;
           estado?: 'BORRADOR' | 'CONFIRMADA' | 'ANULADA';
           total?: number;
           moneda?: string;
+          numero_comprobante?: string | null;
+          observaciones?: string | null;
         }
       >;
       envios: TableShape<

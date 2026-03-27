@@ -208,7 +208,10 @@ export default function App() {
     removeBranch,
     reload,
   } = useBranches(refreshKey);
-  const shouldLoadWarehouses = hasAreaAccess(identityRole, 'envios') || hasAreaAccess(identityRole, 'almacen');
+  const shouldLoadWarehouses =
+    hasAreaAccess(identityRole, 'ventas') ||
+    hasAreaAccess(identityRole, 'envios') ||
+    hasAreaAccess(identityRole, 'almacen');
   const {
     warehouses,
     status: warehousesStatus,
@@ -499,7 +502,12 @@ export default function App() {
                 path="/ventas"
                 element={
                   hasAreaAccess(identityRole, 'ventas') ? (
-                    <SalesSection branches={branches} refreshKey={refreshKey} onSaleCreated={handleRefresh} />
+                    <SalesSection
+                      branches={branches}
+                      warehouses={warehouses}
+                      refreshKey={refreshKey}
+                      onSaleCreated={handleRefresh}
+                    />
                   ) : (
                     <Navigate to="/dashboard" replace />
                   )

@@ -33,11 +33,13 @@ import { StatusState } from '../../SHARED/ui/StatusState';
 import { formatDateTime, formatMoney } from '../../SHARED/utils/format';
 import { isSetupError, toFriendlySupabaseMessage } from '../../SHARED/utils/supabaseGuidance';
 import { sanitizeText } from '../../SHARED/utils/validators';
+import type { Warehouse } from '../../WAREHOUSES/types/Warehouse';
 import { useSales } from '../hooks/useSales';
 import type { CreateSaleLineInput, SaleRecord, SaleShippingResponsible, SaleType } from '../types/Sale';
 
 interface SalesSectionProps {
   branches: Branch[];
+  warehouses: Warehouse[];
   refreshKey: number;
   onSaleCreated?: () => void;
 }
@@ -45,6 +47,8 @@ interface SalesSectionProps {
 interface SaleForm {
   tipoVenta: SaleType;
   localId: string;
+  almacenId: string;
+  descuentoPorcentaje: string;
   estado: 'BORRADOR' | 'CONFIRMADA' | 'ANULADA';
   moneda: string;
   numeroComprobante: string;
@@ -94,7 +98,7 @@ const ProductRow = styled.label`
 
 const TotalsRow = styled.div`
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 
   @media (max-width: 760px) {
@@ -144,6 +148,8 @@ function normalizeText(value: string) {
 const EMPTY_FORM: SaleForm = {
   tipoVenta: 'SUCURSAL',
   localId: '',
+  almacenId: '',
+  descuentoPorcentaje: '0',
   estado: 'CONFIRMADA',
   moneda: 'COP',
   numeroComprobante: '',
@@ -156,7 +162,7 @@ const EMPTY_FORM: SaleForm = {
   envioResponsable: 'CLIENTE',
 };
 
-export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSectionProps) {
+export function SalesSection({ branches, warehouses, refreshKey, onSaleCreated }: SalesSectionProps) {
   const { products } = useProducts(refreshKey);
   const {
     sales,
@@ -209,6 +215,10 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
     () => branches.filter((branch) => branch.estado).map((branch) => ({ id: branch.id, name: branch.nombre })),
     [branches],
   );
+  const warehouseOptions = useMemo(
+    () => warehouses.filter((warehouse) => warehouse.estado).map((warehouse) => ({ id: warehouse.id, name: warehouse.nombre })),
+    [warehouses],
+  );
   const activeProducts = useMemo(
     () =>
       products.filter((product) => product.estado).map((product) => ({
@@ -246,13 +256,20 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
     return Math.max(0, Math.min(100, branchById.get(form.localId)?.porcentajeComision ?? 0));
   }, [branchById, form.localId, form.tipoVenta]);
 
+  const discountPct = useMemo(() => {
+    const parsed = toNumber(form.descuentoPorcentaje);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(0, Math.min(100, parsed));
+  }, [form.descuentoPorcentaje]);
+
   const totals = useMemo(() => {
     const subtotal = selectedLineItems.reduce((sum, line) => sum + line.cantidad * line.precioUnitario, 0);
     const comision = subtotal * (commissionPct / 100);
-    const total = subtotal - comision;
+    const descuento = subtotal * (discountPct / 100);
+    const total = subtotal - comision - descuento;
     const units = selectedLineItems.reduce((sum, line) => sum + line.cantidad, 0);
-    return { subtotal, comision, total, units, products: selectedLineItems.length };
-  }, [commissionPct, selectedLineItems]);
+    return { subtotal, comision, descuento, total, units, products: selectedLineItems.length };
+  }, [commissionPct, discountPct, selectedLineItems]);
 
   const clearLines = () => {
     setLineByProductId((prev) => {
@@ -270,6 +287,7 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
       ...EMPTY_FORM,
       tipoVenta: prev.tipoVenta,
       localId: prev.tipoVenta === 'SUCURSAL' ? prev.localId : '',
+      almacenId: prev.tipoVenta === 'INDIVIDUAL' ? prev.almacenId : '',
       moneda: prev.moneda,
       clientePais: prev.clientePais,
       fecha: toDatetimeLocal(new Date()),
@@ -313,6 +331,10 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
     }
 
     if (form.tipoVenta === 'INDIVIDUAL') {
+      if (!form.almacenId) {
+        setFormError('Debes seleccionar almacen de salida para venta individual.');
+        return;
+      }
       if (!sanitizeText(form.clienteDocumento, 40) || !sanitizeText(form.clienteNombre, 120)) {
         setFormError('Debes completar cedula y nombre del comprador.');
         return;
@@ -331,16 +353,16 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
         return;
       }
       const line = selectedLineItems[0];
-      const subtotal = line.cantidad * line.precioUnitario;
-      const descuento = subtotal * (commissionPct / 100);
       try {
         await editSale(editingSaleId, {
           localId: form.tipoVenta === 'SUCURSAL' ? form.localId : null,
+          almacenId: form.tipoVenta === 'INDIVIDUAL' ? form.almacenId : null,
           productoId: line.productoId,
           cantidad: line.cantidad,
           precioUnitario: line.precioUnitario,
           impuestos: 0,
-          descuento,
+          comisionPorcentaje: commissionPct,
+          descuentoPorcentaje: discountPct,
           estado: form.estado,
           moneda: sanitizeText(form.moneda, 3).toUpperCase() || 'COP',
           numeroComprobante: sanitizeText(form.numeroComprobante, 80),
@@ -359,8 +381,10 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
       await addSale({
         tipoVenta: form.tipoVenta,
         localId: form.tipoVenta === 'SUCURSAL' ? form.localId : null,
+        almacenId: form.tipoVenta === 'INDIVIDUAL' ? form.almacenId : null,
         lineItems: selectedLineItems,
         comisionPorcentaje: commissionPct,
+        descuentoPorcentaje: discountPct,
         estado: form.estado,
         moneda: sanitizeText(form.moneda, 3).toUpperCase() || 'COP',
         numeroComprobante: sanitizeText(form.numeroComprobante, 80),
@@ -385,6 +409,8 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
     setForm({
       tipoVenta: sale.tipoVenta,
       localId: sale.localId ?? '',
+      almacenId: sale.almacenId ?? '',
+      descuentoPorcentaje: String(sale.descuentoPorcentaje ?? 0),
       estado: sale.estado,
       moneda: sale.moneda,
       numeroComprobante: sale.numeroComprobante ?? '',
@@ -412,7 +438,13 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
   const handleCancelEdit = () => {
     setEditingSaleId(null);
     setFormError(null);
-    setForm((prev) => ({ ...EMPTY_FORM, tipoVenta: prev.tipoVenta, localId: prev.localId, moneda: prev.moneda }));
+    setForm((prev) => ({
+      ...EMPTY_FORM,
+      tipoVenta: prev.tipoVenta,
+      localId: prev.localId,
+      almacenId: prev.almacenId,
+      moneda: prev.moneda,
+    }));
     setCountryQuery('');
     setCityQuery('');
     clearLines();
@@ -483,6 +515,7 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
                       ...prev,
                       tipoVenta: event.target.value as SaleType,
                       localId: event.target.value === 'SUCURSAL' ? prev.localId : '',
+                      almacenId: event.target.value === 'INDIVIDUAL' ? prev.almacenId : '',
                     }))
                   }
                 >
@@ -516,8 +549,34 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
                 </Field>
               )}
 
+              <Field>
+                Descuento global (%)
+                <InputControl
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={form.descuentoPorcentaje}
+                  onChange={(event) => setForm((prev) => ({ ...prev, descuentoPorcentaje: event.target.value }))}
+                />
+              </Field>
+
               {form.tipoVenta === 'INDIVIDUAL' && (
                 <>
+                  <Field>
+                    Almacen de salida
+                    <SelectControl
+                      value={form.almacenId}
+                      onChange={(event) => setForm((prev) => ({ ...prev, almacenId: event.target.value }))}
+                    >
+                      <option value="">Selecciona almacen</option>
+                      {warehouseOptions.map((warehouse) => (
+                        <option key={warehouse.id} value={warehouse.id}>
+                          {warehouse.name}
+                        </option>
+                      ))}
+                    </SelectControl>
+                  </Field>
                   <Field>
                     Cedula comprador
                     <InputControl
@@ -659,6 +718,10 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
                 <strong>{formatMoney(totals.comision, form.moneda)}</strong>
               </TotalCard>
               <TotalCard>
+                <small>Descuento</small>
+                <strong>{formatMoney(totals.descuento, form.moneda)}</strong>
+              </TotalCard>
+              <TotalCard>
                 <small>Total venta</small>
                 <strong>{formatMoney(totals.total, form.moneda)}</strong>
               </TotalCard>
@@ -766,6 +829,7 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
                     <th>Producto</th>
                     <th className="num">Cant.</th>
                     <th className="hide-mobile num">Comision</th>
+                    <th className="hide-mobile num">Descuento</th>
                     <th className="num">Total</th>
                     <th>Estado</th>
                     <th className="actions">Acciones</th>
@@ -781,11 +845,12 @@ export function SalesSection({ branches, refreshKey, onSaleCreated }: SalesSecti
                       <td>
                         {sale.tipoVenta === 'SUCURSAL'
                           ? sale.localNombre
-                          : `${sale.clienteNombre ?? 'Cliente'} (${sale.clienteDocumento ?? 'Sin documento'})`}
+                          : `${sale.clienteNombre ?? 'Cliente'} (${sale.clienteDocumento ?? 'Sin documento'}) - ${sale.almacenNombre}`}
                       </td>
                       <td>{sale.productoNombre}</td>
                       <td className="num">{sale.cantidad.toFixed(2)}</td>
                       <td className="hide-mobile num">{formatMoney(sale.comisionValor, sale.moneda)}</td>
+                      <td className="hide-mobile num">{formatMoney(sale.descuentoValor, sale.moneda)}</td>
                       <td className="num">{formatMoney(sale.total, sale.moneda)}</td>
                       <td>
                         <Tag $tone={sale.estado === 'ANULADA' ? 'off' : sale.estado === 'BORRADOR' ? 'warn' : 'ok'}>

@@ -78,8 +78,8 @@ export function toFriendlySupabaseMessage(
     return 'Falta el modulo de almacenes y su trazabilidad. Ejecuta database/027_almacenes_traceability.sql en Supabase.';
   }
 
-  if (/tipo_venta|referencia_grupo|requiere_envio|envio_registrado|tipo_envio|referencia_venta_grupo|cliente_documento|cliente_nombre|barrio|municipio/i.test(rawError)) {
-    return 'Falta la migracion del flujo comercial actualizado. Ejecuta database/031_business_flow_sales_shipments_warehouses.sql en Supabase.';
+  if (/tipo_venta|referencia_grupo|requiere_envio|envio_registrado|tipo_envio|referencia_venta_grupo|cliente_documento|cliente_nombre|barrio|municipio|ventas_almacen_id_fkey|column .*almacen_id|descuento_porcentaje|descuento_valor/i.test(rawError)) {
+    return 'Falta la migracion del flujo comercial actualizado. Ejecuta database/031_business_flow_sales_shipments_warehouses.sql, database/032_sales_individual_from_warehouse.sql y database/033_sales_discount_fields.sql en Supabase.';
   }
 
   if (/list_identity_users|list_identity_roles|create_identity_role|get_identity_context|complete_identity_user_profile|assign_identity_role_to_user|sync_identity_session_link|get_identity_admin_snapshot|update_identity_user_profile|update_identity_user_password/i.test(rawError)) {

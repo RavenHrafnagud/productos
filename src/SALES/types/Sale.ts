@@ -8,6 +8,8 @@ export interface SaleRecord {
   tipoVenta: SaleType;
   localId: string | null;
   localNombre: string;
+  almacenId: string | null;
+  almacenNombre: string;
   usuarioId: string;
   usuarioNombre: string;
   productoId: string | null;
@@ -17,6 +19,8 @@ export interface SaleRecord {
   subtotal: number;
   impuestos: number;
   descuento: number;
+  descuentoPorcentaje: number;
+  descuentoValor: number;
   total: number;
   comisionPorcentaje: number;
   comisionValor: number;
@@ -43,8 +47,10 @@ export interface CreateSaleLineInput {
 export interface CreateSaleInput {
   tipoVenta: SaleType;
   localId: string | null;
+  almacenId: string | null;
   lineItems: CreateSaleLineInput[];
   comisionPorcentaje: number;
+  descuentoPorcentaje: number;
   estado: SaleState;
   moneda: string;
   numeroComprobante: string;
@@ -59,11 +65,13 @@ export interface CreateSaleInput {
 
 export interface UpdateSaleInput {
   localId: string | null;
+  almacenId: string | null;
   productoId: string;
   cantidad: number;
   precioUnitario: number;
   impuestos: number;
-  descuento: number;
+  comisionPorcentaje: number;
+  descuentoPorcentaje: number;
   estado: SaleState;
   moneda: string;
   numeroComprobante: string;
