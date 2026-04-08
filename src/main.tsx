@@ -12,7 +12,7 @@ import { ErrorBoundary } from './SHARED/ui/ErrorBoundary';
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <GlobalStyles />
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <ErrorBoundary>
         <App />
       </ErrorBoundary>
