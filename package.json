@@ -6,10 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "postbuild": "node scripts/copy-gh-pages-404.mjs",
+    "build": "tsc --noEmit && vite build && node scripts/copy-gh-pages-404.mjs",
     "predeploy": "yarn build",
-    "deploy": "gh-pages -d dist",
+    "deploy": "gh-pages -d dist --dotfiles",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "preview": "vite preview"

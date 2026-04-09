@@ -4,19 +4,22 @@
  */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, HashRouter } from 'react-router-dom';
 import App from './APP/App';
 import { GlobalStyles } from './APP/styles/GlobalStyles';
 import { ErrorBoundary } from './SHARED/ui/ErrorBoundary';
 
+const AppRouter = import.meta.env.PROD ? HashRouter : BrowserRouter;
+const routerProps = import.meta.env.PROD ? {} : { basename: import.meta.env.BASE_URL };
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <GlobalStyles />
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
+    <AppRouter {...routerProps}>
       <ErrorBoundary>
         <App />
       </ErrorBoundary>
-    </BrowserRouter>
+    </AppRouter>
   </StrictMode>,
 );
 

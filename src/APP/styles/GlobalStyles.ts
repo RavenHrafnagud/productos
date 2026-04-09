@@ -5,8 +5,6 @@
 import { createGlobalStyle } from 'styled-components';
 
 export const GlobalStyles = createGlobalStyle`
-  @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Manrope:wght@300;400;500;600;700&display=swap');
-
   :root {
     --bg-page: #f4f1eb;
     --bg-panel: #ffffff;
