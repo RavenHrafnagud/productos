@@ -1,60 +1,175 @@
-# El Tarot como Guia - Panel Administrativo
+# El Tarot como Guia - Panel Operativo
 
-Frontend en React + TypeScript para poblar y operar una base Supabase inicialmente vacia.
+Aplicacion web (React + TypeScript + Supabase) para centralizar operacion comercial:
+ventas, envios, inventario, sucursales, almacenes, usuarios y analitica financiera.
 
-## Que incluye esta version
+## Objetivo del sistema
 
-- Login seguro con Supabase Auth (correo + clave fuerte).
-- Registro de sucursales desde interfaz.
-- Registro de productos desde interfaz.
-- Carga de inventario inicial y ajustes de stock desde interfaz.
-- Modulo de ventas con registro e historial.
-- Dashboard inicial con estadisticas por fechas, productos y sucursales.
-- Modulo de usuarios para gestionar roles y asignaciones.
-- Navegacion por rutas con menu lateral (`/dashboard`, `/ventas`, `/productos`, `/sucursales`, `/inventario`, `/usuarios`).
-- Branding de la empresa: **El Tarot como Guia**.
-- Arquitectura modular por dominios (screaming architecture).
+- Centralizar datos del negocio en un solo panel.
+- Trazar cada producto desde almacen hasta venta y entrega.
+- Automatizar calculos de comisiones, descuentos, costos y ganancia neta.
+- Operar por roles con permisos diferenciados.
+
+## Que hace cada modulo
+
+### 1) Dashboard
+
+- Consolida operaciones de ventas y envios.
+- Permite filtrar por rango de fechas, canal, sucursal y producto.
+- Muestra KPIs: operaciones, unidades, ingreso bruto, comisiones/descuentos, costos de envio, ganancia neta.
+- Incluye comparativos de periodo, top productos, top sucursales y detalle diario.
+
+### 2) Ventas
+
+- Registra ventas de tipo:
+  - `SUCURSAL`
+  - `INDIVIDUAL`
+- Soporta multiproducto por venta.
+- Calcula automaticamente:
+  - subtotal
+  - comision (segun sucursal)
+  - descuento global (%)
+  - total neto de venta
+- En ventas individuales:
+  - origen en almacen obligatorio
+  - datos de comprador (documento, nombre, pais, ciudad)
+  - define quien paga envio (`CLIENTE` o `NOSOTROS`)
+  - si paga `NOSOTROS`, deja pendiente para modulo de envios.
+
+### 3) Envios
+
+- Registra envios de tipo:
+  - `SUCURSAL`
+  - `INDIVIDUAL`
+- Soporta multiproducto por envio.
+- En individuales, toma destinatario desde ventas pendientes de envio.
+- Gestiona estados de envio:
+  - `PENDIENTE`
+  - `ENVIADO`
+  - `ENTREGADO`
+- Al marcar `ENTREGADO`, ejecuta trazabilidad de inventario con triggers.
+
+### 4) Productos
+
+- Gestion de catalogo: nombre, descripcion, codigo de barra/ISBN, precio, estado.
+- CRUD completo con validaciones.
+
+### 5) Sucursales
+
+- Gestion de sedes comerciales.
+- Incluye datos fiscales y operativos:
+  - NIT
+  - RUT
+  - PDF de RUT (storage bucket)
+  - porcentaje de comision
+  - ubicacion y contacto.
+
+### 6) Almacen
+
+- Gestion de bodegas origen para ventas/envios.
+- Campos de costo operativo (es propio / arriendo).
+- Inventario por almacen y movimientos de almacen.
+- Soporta localidad (barrio/municipio unificado).
+
+### 7) Inventario
+
+- Inventario por sucursal (existencia y minimo).
+- Ajustes manuales con registro de movimientos.
+- Alertas de bajo stock.
+- Integracion con envios y ventas para trazabilidad.
+
+### 8) Usuarios
+
+- Gestion de identidad y roles en Supabase (`auth` + esquema `identidad`).
+- Creacion de usuarios desde frontend con vinculacion automatica.
+- Edicion de perfil y cambio de password.
+- Asignacion de rol y eliminacion controlada.
+
+## Roles y permisos
+
+- `Administrador`: acceso total a todos los modulos.
+- `Gerente`: acceso total excepto modulo de usuarios.
+- `Usuario`: acceso solo a ventas.
+
+Permisos implementados via RLS + funciones RPC en base de datos.
+
+## Arquitectura funcional
+
+```text
+Frontend (React)
+  -> Auth (Supabase Auth)
+  -> RPCs y tablas por esquema:
+     - identidad.*
+     - catalogo.*
+     - operaciones.*
+     - ventas.*
+  -> Dashboard consolidado (ventas + envios)
+```
+
+## Flujograma operativo (negocio)
+
+```mermaid
+flowchart TD
+  A[Login] --> B{Rol}
+  B -->|Administrador| C[Acceso total]
+  B -->|Gerente| D[Acceso sin Usuarios]
+  B -->|Usuario| E[Acceso solo Ventas]
+
+  C --> F[Configurar maestros]
+  D --> F
+  F --> F1[Productos]
+  F --> F2[Sucursales]
+  F --> F3[Almacen]
+  F --> F4[Usuarios y roles]
+
+  C --> G[Registrar Venta]
+  D --> G
+  E --> G
+
+  G --> H{Tipo venta}
+  H -->|Sucursal| I[Aplicar comision sucursal]
+  H -->|Individual| J[Seleccionar almacen + comprador]
+
+  I --> K[Calcular subtotal-descuento-comision-total]
+  J --> K
+
+  K --> L{Envio pagado por}
+  L -->|Cliente| M[Venta cerrada sin envio pendiente]
+  L -->|Nosotros| N[Generar pendiente para Envios]
+
+  N --> O[Registrar Envio]
+  O --> P{Estado envio}
+  P -->|Pendiente/Enviado| Q[Seguimiento logistico]
+  P -->|Entregado| R[Actualizar trazabilidad de stock]
+
+  R --> S[Inventario sucursal / almacen]
+  S --> T[Dashboard financiero y operativo]
+  M --> T
+```
 
 ## Estructura de carpetas
 
 ```text
 src/
-  APP/         # composicion general y shell visual
-  AUTH/        # inicio/cierre de sesion
-  DASHBOARD/   # indicadores y analitica comercial
-  BRANCHES/    # sucursales
-  SALES/       # ventas
-  PRODUCTS/    # catalogo de productos
-  INVENTORY/   # inventario por sucursal
-  USERS/       # usuarios y roles
-  SHARED/      # componentes, utilidades, cliente Supabase y tipos
+  APP/         shell, rutas, navegacion y control de acceso
+  AUTH/        login/sesion
+  DASHBOARD/   analitica y KPIs
+  SALES/       ventas y reglas de negocio comercial
+  SHIPMENTS/   envios y estados logisticos
+  PRODUCTS/    catalogo
+  BRANCHES/    sucursales
+  WAREHOUSES/  almacenes + inventario de origen
+  INVENTORY/   inventario por sucursal + movimientos
+  USERS/       identidad, roles, gestion de cuentas
+  SHARED/      componentes UI, utilidades, cliente Supabase, tipos
 database/
-  001_bootstrap_admin.sql  # script de administrador inicial
-  005_fix_admin_branch_permissions.sql  # corrige permisos RLS para sucursales
-  006_update_locales_estado.sql  # elimina gerente_persona_id y renombra activo->estado
-  007_secure_delete_helpers.sql  # funciones seguras para eliminar productos/sucursales en cascada
-  008_update_productos_estado.sql  # elimina precio_compra y renombra activo->estado en productos
-  009_drop_usuario_locales.sql  # elimina la tabla operaciones.usuario_locales y FKs relacionadas
-  010_merge_detalle_venta_into_ventas.sql  # integra detalle_venta en ventas y elimina tablas legacy
-  011_fix_operaciones_rls_after_usuario_locales.sql  # repara politicas RLS de operaciones para admins
-  012_update_movimientos_usuario_id.sql  # cambia persona_id por usuarios_id en movimientos_inventario
-  013_refactor_identidad_estado_roles.sql  # refactor en identidad (estado/roles/usuarios)
-  014_create_identity_user_with_auth.sql  # crea funcion RPC para alta completa de usuarios (auth + identidad)
-  015_identity_admin_management_rpc.sql  # RPCs para listar usuarios auth, crear roles y completar perfiles pendientes
-  016_session_identity_link_and_permissions.sql  # auditoria y enlace automatico de sesion con permisos por rol
-  017_align_roles_administrador_gerente_usuario.sql  # alinea validacion admin para roles "Administrador/Gerente/Usuario"
-  018_identity_snapshot_rpc.sql  # snapshot JSON de identidad para cargar usuarios/roles sin conflictos de tipos
-  019_role_based_permissions.sql  # permisos por rol (Administrador/Gerente/Usuario) en RLS y grants
-  020_update_identity_user_profile.sql  # actualiza datos basicos de usuarios sin cambiar roles
-  021_delete_identity_user_account.sql  # elimina usuarios (auth + identidad) con validacion admin
-  022_repair_auth_instances.sql  # repara instance_id en Auth y asegura identities email
-  023_update_identity_user_password.sql  # permite actualizar contrasenas desde el panel admin
+  001..034_*   migraciones SQL para auth, identidad, permisos, ventas, envios, trazabilidad y almacenes
 ```
 
 ## Configuracion local
 
 1. Copia `.env.example` a `.env`.
-2. Completa estas variables:
+2. Configura variables:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
    - `VITE_COMPANY_NAME` (opcional)
@@ -62,52 +177,49 @@ database/
    - `VITE_DEFAULT_BRANCH_ID` (opcional)
 3. Instala dependencias:
    - `yarn install`
-4. Levanta el proyecto:
+4. Ejecuta en desarrollo:
    - `yarn dev`
 
-## Usuario administrador inicial
+## Orden recomendado de base de datos
 
-Para crear el administrador solicitado, ejecuta en Supabase SQL Editor:
-
-- Archivo: `database/001_bootstrap_admin.sql`
-- Correo creado: `hrafnfreistudrr@gmail.com`
-- Contrasena configurada: `$%&Heimdallr-Emperatriz123$%&`
-
-El script:
-- crea/actualiza usuario en `auth.users` con hash seguro (`crypt` + `gen_salt`),
-- crea identidad en `auth.identities`,
-- crea persona/usuario de negocio en esquema `identidad`,
-- asigna rol `admin`.
-
-## Seguridad aplicada en frontend
-
-- No se construyen consultas SQL manuales en cliente.
-- Todas las operaciones usan SDK oficial de Supabase (consultas parametrizadas).
-- Validaciones de entrada para correo, texto y montos.
-- Requisito de clave fuerte en login.
-- Bloqueo temporal tras multiples intentos fallidos.
-- Sesion gestionada por Supabase Auth.
+- Ejecutar migraciones en orden numerico (`001` a `034`) en Supabase SQL Editor.
+- Las migraciones clave para operacion completa:
+  - identidad y roles: `013`..`023`
+  - permisos RLS por rol: `019`
+  - sucursales/envios/comision: `024`
+  - reportes financieros: `025`
+  - trazabilidad ventas-envios: `026`
+  - almacenes y stock origen: `027`
+  - fixes de tipos/check constraints: `028`, `029`
+  - flujo negocio ventas/envios/almacen: `030`, `031`, `032`, `033`, `034`
 
 ## Scripts
 
 - `yarn dev`: desarrollo
 - `yarn typecheck`: validacion TypeScript
 - `yarn lint`: analisis estatico
-- `yarn build`: typecheck + build
-- `yarn preview`: preview de build
+- `yarn build`: typecheck + build + generacion `404.html` y `.nojekyll` para Pages
+- `yarn preview`: preview local del build
+- `yarn deploy`: publica `dist` en `gh-pages`
 
-## Nota operativa
+## Deploy en GitHub Pages
 
-La seguridad final depende de tu configuracion de RLS/policies en Supabase.  
-Este frontend ya esta preparado para trabajar con esas politicas de forma segura.
+Configurado para repo de proyecto: `https://ravenhrafnagud.github.io/productos/`
 
-Para crear usuarios de negocio desde interfaz tienes 2 modos:
-- Automatico: crea cuenta en Authentication y la vincula a identidad (requiere `database/014_create_identity_user_with_auth.sql`).
-- Completar existente: detecta usuarios ya creados en Authentication sin perfil en identidad y permite completar documento/nombres/rol (requiere `database/015_identity_admin_management_rpc.sql`).
+- `vite.config.js` usa `base: '/productos/'`
+- Produccion usa `HashRouter` para evitar 404 en recarga de rutas internas.
 
-Nota: si deseas crear usuarios sin enviar correo de confirmacion, desactiva "Confirm email" en
-Authentication -> Providers -> Email dentro del panel de Supabase.
+Pasos:
+1. `yarn build`
+2. `yarn deploy`
+3. En GitHub: `Settings > Pages` -> branch `gh-pages` / root
 
-Para auditoria y enlace automatico de sesion (auth -> identidad -> rol), ejecuta:
-- `database/016_session_identity_link_and_permissions.sql`
+## Auditoria tecnica (resumen actual)
+
+Estado verificado:
+- `yarn typecheck` OK
+- `yarn lint` OK
+
+Riesgo pendiente:
+- Bundle principal grande (`~8.7 MB` minificado). Recomendado optimizar `manualChunks` y revisar librerias pesadas.
 
